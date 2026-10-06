@@ -1,5 +1,3 @@
-Lookout — компаньон для Frigate NVR: дожидается, пока запись события полностью ляжет на диск, и отправляет в Telegram настоящий ролик целиком, со снимками, описанием от ИИ и распознанными лицами. В веб-интерфейсе — живой лог, галерея событий с видео, статистика и редактор настроек. Исходники <a href="https://github.com/rsvln/lookout">тут</a>.<br><br>
-
 # Lookout
 
 A companion service for [Frigate NVR](https://frigate.video). Frigate's own clips can be cut short or out of sync when a stream lags; Lookout waits until the recording of an event or review is really complete ("true end"), builds the clip from the recording segments itself and delivers it to Telegram together with snapshots, an AI description and recognized faces. A web UI on top of Frigate's database shows what happened: live log, event galleries with video, statistics and the config editor.
