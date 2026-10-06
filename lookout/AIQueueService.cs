@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Telegram.Bot;
 
-namespace frte2tg
+namespace Lookout
 {
     public class AIQueueService
     {

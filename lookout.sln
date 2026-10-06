@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34714.143
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "frte2tg", "frte2tg\frte2tg.csproj", "{8B38CD9F-023F-440A-99D8-04A110B47128}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lookout", "lookout\lookout.csproj", "{8B38CD9F-023F-440A-99D8-04A110B47128}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,7 +1,7 @@
 ﻿using Telegram.Bot.Types;
 using YamlDotNet.Core;
 
-namespace frte2tg
+namespace Lookout
 {
 
     public class Queries

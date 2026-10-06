@@ -14,17 +14,17 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 #FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["frte2tg/frte2tg.csproj", "frte2tg/"]
-RUN dotnet restore "./frte2tg/frte2tg.csproj"
+COPY ["lookout/lookout.csproj", "lookout/"]
+RUN dotnet restore "./lookout/lookout.csproj"
 COPY . .
-WORKDIR "/src/frte2tg"
-RUN dotnet build "./frte2tg.csproj" -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR "/src/lookout"
+RUN dotnet build "./lookout.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./frte2tg.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./lookout.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "frte2tg.dll"]
+ENTRYPOINT ["dotnet", "lookout.dll"]

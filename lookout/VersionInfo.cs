@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace frte2tg
+namespace Lookout
 {
     // App version from the assembly attributes set by Directory.Build.props (version.txt + build date).
     public static class VersionInfo
@@ -15,6 +15,6 @@ namespace frte2tg
         // "2026-09-24", or empty when the build date is unknown
         public static string BuildDate => Informational.Contains('+') ? Informational.Split('+')[1].Replace('.', '-') : "";
 
-        public const string ProjectUrl = "https://github.com/rsvln/frte2tg";
+        public const string ProjectUrl = "https://github.com/rsvln/lookout";
     }
 }

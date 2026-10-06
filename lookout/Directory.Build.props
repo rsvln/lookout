@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <!--
+    Version comes from version.txt ("Major.Minor.Patch"), read at evaluation time.
+    It is bumped by scripts/bump-version.ps1 (run by publish.bat) before a release build, never during a build.
+  -->
+  <PropertyGroup>
+    <LookoutVersionFile>$(MSBuildThisFileDirectory)version.txt</LookoutVersionFile>
+    <LookoutVersion Condition="Exists('$(LookoutVersionFile)')">$([System.IO.File]::ReadAllText('$(LookoutVersionFile)').Trim())</LookoutVersion>
+    <LookoutVersion Condition="'$(LookoutVersion)' == ''">1.0.0</LookoutVersion>
+
+    <LookoutMajor>$([System.Version]::Parse('$(LookoutVersion)').Major)</LookoutMajor>
+    <LookoutMinor>$([System.Version]::Parse('$(LookoutVersion)').Minor)</LookoutMinor>
+    <LookoutPatch>$([System.Version]::Parse('$(LookoutVersion)').Build)</LookoutPatch>
+
+    <Version>$(LookoutVersion)</Version>
+    <AssemblyVersion>$(LookoutMajor).$(LookoutMinor).$(LookoutPatch).0</AssemblyVersion>
+    <FileVersion>$(LookoutMajor).$(LookoutMinor).$(LookoutPatch).0</FileVersion>
+    <LookoutBuildDate>$([System.DateTime]::UtcNow.ToString("yyyy.MM.dd"))</LookoutBuildDate>
+    <InformationalVersion>$(LookoutVersion)+$(LookoutBuildDate)</InformationalVersion>
+  </PropertyGroup>
+</Project>

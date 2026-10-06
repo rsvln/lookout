@@ -1,7 +1,7 @@
 ﻿using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace frte2tg
+namespace Lookout
 {
     internal static class WebUi
     {
@@ -23,7 +23,7 @@ namespace frte2tg
                         await next();
                         return;
                     }
-                    context.Response.Headers["WWW-Authenticate"] = "Basic realm=\"frte2tg\", charset=\"UTF-8\"";
+                    context.Response.Headers["WWW-Authenticate"] = "Basic realm=\"Lookout\", charset=\"UTF-8\"";
                     context.Response.StatusCode = 401;
                 });
 
@@ -34,11 +34,11 @@ namespace frte2tg
                 app.MapGet("/api/log", (int? lines) =>
                 {
                     int n = lines ?? 200;
-                    string logDir = "/var/log/frte2tg/";
+                    string logDir = "/var/log/lookout/";
                     if (!Directory.Exists(logDir))
                         return Results.Ok(new { lines = Array.Empty<string>() });
 
-                    var logFiles = Directory.GetFiles(logDir, "frte2tg_*.log")
+                    var logFiles = Directory.GetFiles(logDir, "lookout_*.log")
                                             .OrderByDescending(f => f)
                                             .ToArray();
 
@@ -776,7 +776,7 @@ namespace frte2tg
               <div class="panel" id="panel-about">
                 <div class="scroll">
                   <div class="about-head">
-                    <div class="about-name">frte2tg</div>
+                    <div class="about-name">Lookout</div>
                     <div class="about-meta">
                       <span>{{web.about.version}} <b>%VERSION%</b></span>
                       <span>{{web.about.build}} <b>%BUILD%</b></span>
@@ -792,7 +792,7 @@ namespace frte2tg
             </div>
 
             <footer class="app-footer">
-              <span>frte2tg <b>v%VERSION%</b></span>
+              <span>Lookout <b>v%VERSION%</b></span>
               <span>{{web.about.build}} %BUILD%</span>
               <a href="%URL%" target="_blank" rel="noopener">GitHub</a>
             </footer>
@@ -812,7 +812,7 @@ namespace frte2tg
 
             // Settings that are not part of a view (lines, refresh intervals) and the last address of every tab
             // stay in this browser's localStorage.
-            const PREFS_KEY = 'frte2tg.prefs';
+            const PREFS_KEY = 'lookout.prefs';
             const PREFS = ['log-lines', 'refresh-interval', 'last-refresh'];
 
             function readPrefs() {
@@ -1386,7 +1386,7 @@ namespace frte2tg
               }
               const result = st.mqtt ? 'applied' : 'applied_nomqtt';
               if (st.locale && st.locale !== PAGE_LOCALE) {
-                try { sessionStorage.setItem('frte2tg.toast', result); } catch { }
+                try { sessionStorage.setItem('lookout.toast', result); } catch { }
                 location.reload();
                 return;
               }
@@ -1425,11 +1425,15 @@ namespace frte2tg
             }
 
 
-            // Start: settings from this browser (taken over once from the old 'frte2tg.ui' state), then the view of the address.
+            // Start: settings from this browser (taken over once from frte2tg, the app's old name), then the view of the address.
             (() => {
               let fields = readPrefs().fields;
               if (!fields) {
-                try { fields = (JSON.parse(localStorage.getItem('frte2tg.ui')) || {}).fields; } catch { }
+                try {
+                  const old = JSON.parse(localStorage.getItem('frte2tg.prefs')) || {};
+                  if (old.fields || old.urls) writePrefs(old);
+                  fields = old.fields || (JSON.parse(localStorage.getItem('frte2tg.ui')) || {}).fields;
+                } catch { }
                 if (fields) writePrefs({ fields });
               }
               PREFS.forEach(id => { if (fields && id in fields) document.getElementById(id).value = fields[id]; });
@@ -1442,9 +1446,9 @@ namespace frte2tg
 
             // Result of "apply" that reloaded the page for a new language.
             try {
-              const pending = sessionStorage.getItem('frte2tg.toast');
+              const pending = sessionStorage.getItem('lookout.toast');
               if (pending) {
-                sessionStorage.removeItem('frte2tg.toast');
+                sessionStorage.removeItem('lookout.toast');
                 showToast(t('web.config.' + pending), pending === 'applied' ? 'ok' : 'err');
               }
             } catch { }

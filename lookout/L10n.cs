@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace frte2tg
+namespace Lookout
 {
     // Strings of one language, loaded from locales/<locale>.json next to the app; keys missing in it fall back
     // to en.json, and a key missing everywhere is returned as is.

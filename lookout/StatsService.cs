@@ -2,7 +2,7 @@
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
 
-namespace frte2tg
+namespace Lookout
 {
     // Read-only queries against Frigate's `event` / `reviewsegment` tables for /last, /stat and the web UI.
     // All user-supplied values go through SQL parameters.

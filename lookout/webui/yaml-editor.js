@@ -1,4 +1,4 @@
-// YAML editor for the Config tab (CodeMirror 6). Built with `npm run build` into frte2tg/web/yaml-editor.js,
+// YAML editor for the Config tab (CodeMirror 6). Built with `npm run build` into lookout/web/yaml-editor.js,
 // which the app serves at /js/yaml-editor.js, so the page works without internet access.
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";

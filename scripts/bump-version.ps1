@@ -1,7 +1,7 @@
 # bump-version.ps1
-# Bumps the patch number in frte2tg/version.txt if the app's source files changed since the last bump.
+# Bumps the patch number in lookout/version.txt if the app's source files changed since the last bump.
 #
-# Change detection: SHA256 per file, stored in frte2tg/.src-hash (committed together with version.txt).
+# Change detection: SHA256 per file, stored in lookout/.src-hash (committed together with version.txt).
 #
 # Usage:
 #   .\scripts\bump-version.ps1             - bump if sources changed
@@ -16,7 +16,7 @@ param(
 )
 
 $root       = Split-Path -Parent $PSScriptRoot
-$projectDir = Join-Path $root 'frte2tg'
+$projectDir = Join-Path $root 'lookout'
 $versionFile = Join-Path $projectDir 'version.txt'
 $hashFile    = Join-Path $projectDir '.src-hash'
 $utf8NoBom   = [Text.UTF8Encoding]::new($false)
@@ -66,7 +66,7 @@ foreach ($f in $stored.Keys) {
 }
 
 if ($Diagnose) {
-    Write-Host "frte2tg v$version"
+    Write-Host "Lookout v$version"
     if ($changed.Count -eq 0) { Write-Host "  No changes." } else { $changed | ForEach-Object { Write-Host "  $_" } }
     exit 0
 }
@@ -77,12 +77,12 @@ function Write-Hashes {
 
 if ($Init) {
     Write-Hashes
-    Write-Host "  frte2tg: $version (baseline recorded)"
+    Write-Host "  Lookout: $version (baseline recorded)"
     exit 0
 }
 
 if ($changed.Count -eq 0 -and -not $Force) {
-    Write-Host "  frte2tg: $version (no changes, skipped)"
+    Write-Host "  Lookout: $version (no changes, skipped)"
     exit 0
 }
 
@@ -91,4 +91,4 @@ $parts[2] = [int]$parts[2] + 1
 $newVersion = $parts -join '.'
 [IO.File]::WriteAllText($versionFile, $newVersion, $utf8NoBom)
 Write-Hashes
-Write-Host "  frte2tg: $version -> $newVersion"
+Write-Host "  Lookout: $version -> $newVersion"

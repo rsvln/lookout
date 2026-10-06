@@ -15,7 +15,7 @@ jobs:
 
       - name: Read version
         id: version
-        run: echo "version=$(tr -d '[:space:]' < frte2tg/version.txt)" >> $GITHUB_OUTPUT
+        run: echo "version=$(tr -d '[:space:]' < lookout/version.txt)" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -28,11 +28,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./frte2tg/Dockerfile
+          file: ./lookout/Dockerfile
           push: true
           tags: |
-            ghcr.io/rsvln/frte2tg:latest
-            ghcr.io/rsvln/frte2tg:${{ steps.version.outputs.version }}
+            ghcr.io/rsvln/lookout:latest
+            ghcr.io/rsvln/lookout:${{ steps.version.outputs.version }}
 
       # One release per version: created on the first push of a new version.txt (publish.bat), skipped afterwards.
       - name: Tag and release
@@ -52,15 +52,15 @@ jobs:
           fi
           # Docker Hub is pushed by publish.bat, so list it only when that tag is really there.
           HUB=""
-          if curl -sf "https://hub.docker.com/v2/repositories/rsvln/frte2tg/tags/$VERSION" >/dev/null; then
-            HUB="docker pull rsvln/frte2tg:$VERSION"
+          if curl -sf "https://hub.docker.com/v2/repositories/rsvln/lookout/tags/$VERSION" >/dev/null; then
+            HUB="docker pull rsvln/lookout:$VERSION"
           fi
           cat > notes.md <<EOF
           ### Docker image
 
           \`\`\`bash
-          docker pull ghcr.io/rsvln/frte2tg:$VERSION
+          docker pull ghcr.io/rsvln/lookout:$VERSION
           $HUB
           \`\`\`
           EOF
-          gh release create "$TAG" --title "frte2tg $TAG" --notes-file notes.md --generate-notes --latest
+          gh release create "$TAG" --title "Lookout $TAG" --notes-file notes.md --generate-notes --latest

@@ -1,6 +1,6 @@
-Основная задача сервиса - дождаться завершения записи видео по событию на диск и отправить его в телеграм, в том числе разбив его на части, в случае необходимости. Исходники <a href="https://github.com/rsvln/frte2tg">тут</a><br><br>
+Основная задача сервиса - дождаться завершения записи видео по событию на диск и отправить его в телеграм, в том числе разбив его на части, в случае необходимости. Исходники <a href="https://github.com/rsvln/lookout">тут</a><br><br>
 
-# frte2tg
+# Lookout
 
 Frigate NVR → Telegram bridge. Subscribes to Frigate MQTT events and reviews, sends snapshots, video clips and animated previews to Telegram. Optionally analyzes snapshots with a local AI model via Ollama and performs face recognition via CompreFace.
 
@@ -37,21 +37,21 @@ Image is available from both Docker Hub and GitHub Container Registry, as `lates
 
 ```bash
 # Docker Hub
-docker pull rsvln/frte2tg:latest
+docker pull rsvln/lookout:latest
 
 # GitHub Container Registry
-docker pull ghcr.io/rsvln/frte2tg:latest
+docker pull ghcr.io/rsvln/lookout:latest
 ```
 
 ```yaml
 # docker-compose.yml
 services:
-  frte2tg:
-    image: ghcr.io/rsvln/frte2tg:latest  # or rsvln/frte2tg:latest
+  lookout:
+    image: ghcr.io/rsvln/lookout:latest  # or rsvln/lookout:latest
     restart: unless-stopped
     volumes:
-      - /etc/frte2tg:/etc/frte2tg
-      - /var/log/frte2tg:/var/log/frte2tg
+      - /etc/lookout:/etc/lookout
+      - /var/log/lookout:/var/log/lookout
       - /srv/frigate/clips:/srv/frigate/clips:ro
       - /srv/frigate/recordings:/srv/frigate/recordings:ro
       - /srv/frigate/config/frigate.db:/srv/frigate/config/frigate.db:ro
@@ -61,7 +61,7 @@ services:
 
 ## Configuration
 
-Config file: `/etc/frte2tg/frte2tg.yml`
+Config file: `/etc/lookout/lookout.yml`
 
 ```yaml
 frigate:
@@ -169,7 +169,7 @@ web:
 
 ## GIF Previews
 
-When `gif: true` is set for a camera, frte2tg generates an animated GIF from the recorded clip using ffmpeg (8 fps, 8x speed) and sends it as a separate Telegram animation. Width is controlled globally via `options.gifwidth`.
+When `gif: true` is set for a camera, Lookout generates an animated GIF from the recorded clip using ffmpeg (8 fps, 8x speed) and sends it as a separate Telegram animation. Width is controlled globally via `options.gifwidth`.
 
 ## Face Recognition
 
@@ -230,7 +230,7 @@ Objects can be given by their Frigate label (`person`) or by their name in any l
 ## Building from source
 
 ```bash
-docker build -t frte2tg -f frte2tg/Dockerfile .
+docker build -t lookout -f lookout/Dockerfile .
 ```
 
 ## License

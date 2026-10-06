@@ -16,7 +16,7 @@ using Telegram.Bot.Types.ReplyMarkups;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace frte2tg
+namespace Lookout
 {
     internal class Program
     {
@@ -39,7 +39,7 @@ namespace frte2tg
             settings = new SettingsFile();
             string fs;
             if (args.Length == 0)
-                fs = "/etc/frte2tg/frte2tg.yml";
+                fs = "/etc/lookout/lookout.yml";
             else
                 fs = args[0];
             try
@@ -55,7 +55,7 @@ namespace frte2tg
                 return;
             }
 
-            Log("app", "", "", "frte2tg v" + VersionInfo.Informational + " started");
+            Log("app", "", "", "Lookout v" + VersionInfo.Informational + " started");
             WebUi.Start(fs);
             StatsService.StartClipCacheCleaner();
             await Initialize();
@@ -139,7 +139,7 @@ namespace frte2tg
                 mqttFactory = new MqttClientFactory();
                 mqttClient = mqttFactory.CreateMqttClient();
                 mqttOptions = new MqttClientOptionsBuilder()
-                    .WithClientId("frte2tg")
+                    .WithClientId("lookout")
                     .WithTcpServer(settings.mqtt.host, settings.mqtt.port)
                     .WithCredentials(settings.mqtt.user, settings.mqtt.password)
                     .WithCleanSession()
@@ -1930,8 +1930,8 @@ namespace frte2tg
                 DateTime now = LogNow;
                 lock (logLock)
                 {
-                    Directory.CreateDirectory("/var/log/frte2tg/");
-                    System.IO.File.AppendAllText("/var/log/frte2tg/frte2tg_" + now.ToString("yyyy-MM-dd") + ".log",
+                    Directory.CreateDirectory("/var/log/lookout/");
+                    System.IO.File.AppendAllText("/var/log/lookout/lookout_" + now.ToString("yyyy-MM-dd") + ".log",
                                                  now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "\t" + type + "\t" + eventid + "\t" + camera + "\t" + txt + "\n");
                 }
             }
