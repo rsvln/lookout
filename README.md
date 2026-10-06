@@ -1,25 +1,41 @@
-Основная задача сервиса - дождаться завершения записи видео по событию на диск и отправить его в телеграм, в том числе разбив его на части, в случае необходимости. Исходники <a href="https://github.com/rsvln/lookout">тут</a><br><br>
+Lookout — компаньон для Frigate NVR: дожидается, пока запись события полностью ляжет на диск, и отправляет в Telegram настоящий ролик целиком, со снимками, описанием от ИИ и распознанными лицами. В веб-интерфейсе — живой лог, галерея событий с видео, статистика и редактор настроек. Исходники <a href="https://github.com/rsvln/lookout">тут</a>.<br><br>
 
 # Lookout
 
-Frigate NVR → Telegram bridge. Subscribes to Frigate MQTT events and reviews, sends snapshots, video clips and animated previews to Telegram. Optionally analyzes snapshots with a local AI model via Ollama and performs face recognition via CompreFace.
+A companion service for [Frigate NVR](https://frigate.video). Frigate's own clips can be cut short or out of sync when a stream lags; Lookout waits until the recording of an event or review is really complete ("true end"), builds the clip from the recording segments itself and delivers it to Telegram together with snapshots, an AI description and recognized faces. A web UI on top of Frigate's database shows what happened: live log, event galleries with video, statistics and the config editor.
+
+Previously named **frte2tg**.
 
 ## Features
 
-- Handles both Frigate **events** and **reviews** (configurable per camera)
-- Sends **snapshots** as media groups; for events still in progress (e.g. a parked car in a review that has already ended) the current best frame is taken from the Frigate API instead of waiting for the file
-- Concatenates and sends **video clips** via ffmpeg
-- Splits large clips automatically
-- Generates and sends **animated GIF previews** (optional, per camera)
-- Re-publishes event/review to MQTT with type `trueend` when recordings are fully ready (optional, per camera)
-- **Face recognition** via CompreFace — identifies known people in snapshots (optional, per camera)
-- **AI-powered snapshot descriptions** via Ollama (optional, per camera) — if both FR and AI are enabled, recognized names are passed to Ollama as context
-- Telegram rate limit handling with automatic retry
-- Per-camera configuration: objects, zones, severity, triggers, behavior
-- **Telegram commands** `/status`, `/last`, `/stat` — current view, latest N events of every camera, statistics by camera, object, hour and day, with inline buttons
-- **Web UI** (port 8888): live log, latest events with snapshots and **video playback / download**, statistics dashboard, YAML config editor with apply without restart; optional password
-- **Localization** of Telegram messages and the web UI (`en`, `ru`, easy to add more)
-- Runs as a Docker container
+**Telegram delivery**
+- Handles both Frigate **events** and **reviews** (configurable per camera): objects with confidence thresholds, zones, severity, triggers
+- Waits until all recording segments are on disk, then sends **complete video clips** built with ffmpeg; large clips are split automatically
+- **Snapshots** as media groups; for objects still in view (e.g. a parked car in a review that has already ended) the current best frame comes from the Frigate API
+- **Animated GIF previews** (optional, per camera)
+- Telegram rate limit handling with automatic retry; local Bot API server supported for large files
+
+**Recognition and AI**
+- **AI snapshot descriptions** via Ollama with a vision model (optional, per camera), in the language you choose
+- **Face recognition** via CompreFace (optional, per camera); recognized names are passed to the AI as context
+
+**Telegram commands**
+- `/status` — current frame of every camera
+- `/last` — latest events of every camera or one camera, with buttons to switch camera and object
+- `/stat` — events by camera, object, hour and day for 24 h / today / 7 d / 30 d, with buttons to switch the period
+
+**Web UI** (port 8888)
+- Live log with filters, newest lines first
+- **Last events** as snapshot cards with in-page **video playback and download** (clips built from recordings, also for events still in progress)
+- **Statistics**: cameras × objects matrix, activity by hour and day; click any cell or bar to see the events behind it as a gallery
+- Every view has its own address, so it can be bookmarked or shared; browser Back / Forward work
+- YAML **config editor** with highlighting and validation, applied without restarting the container
+- Optional password
+
+**Integration**
+- Re-publishes an event / review to MQTT with type `trueend` once its recording is complete, for automations (optional, per camera)
+- **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, easy to add more)
+- Runs as a Docker container (Docker Hub and GitHub Container Registry)
 
 ## Requirements
 
@@ -33,7 +49,7 @@ Frigate NVR → Telegram bridge. Subscribes to Frigate MQTT events and reviews, 
 
 ## Quick Start
 
-Image is available from both Docker Hub and GitHub Container Registry, as `latest` or a specific version (e.g. `1.0.0`, shown in the web UI footer):
+Image is available from both Docker Hub and GitHub Container Registry, as `latest` or a specific version (e.g. `2.11.33`, shown in the web UI footer):
 
 ```bash
 # Docker Hub
