@@ -29,7 +29,7 @@ Previously named **frte2tg**.
 - **Last events** as snapshot cards with in-page **video playback and download** (clips built from recordings, also for events still in progress)
 - **Statistics**: cameras × objects matrix, activity by hour and day; click any cell or bar to see the events behind it as a gallery
 - Every view has its own address, so it can be bookmarked or shared; browser Back / Forward work
-- YAML **config editor** with highlighting and validation, applied without restarting the container
+- **Config** as a settings tree (including add/remove cameras) or YAML, applied without restarting the container
 - **Search**, stats CSV export, PWA install
 - Optional login (HTTP Basic or a sign-in form; admin / viewer roles)
 
@@ -52,7 +52,7 @@ Previously named **frte2tg**.
 
 ## Quick Start
 
-Image is available from both Docker Hub and GitHub Container Registry, as `latest` or a specific version (e.g. `2.11.33`, shown in the web UI footer):
+Image is available from both Docker Hub and GitHub Container Registry, as `latest` or a specific version (e.g. `2.11.35`, shown in the web UI footer):
 
 ```bash
 # Docker Hub
@@ -282,10 +282,10 @@ Object names from every locale file are understood in commands, e.g. `/last че
 Available at `http://<host>:8888`. The Config tab shows the bot token and MQTT password, so set `web.user` / `web.password` if the port is reachable by others.
 
 - **Log** — live log viewer with filtering by type, camera, text, color-coded by event ID
-- **Last** — latest N events of every camera (grouped by camera) or the history of one camera, as snapshot cards with object, score, time and zones. Click a snapshot to enlarge it. Every card has **▶ Video** (plays the clip in the page, with seeking) and **⬇** (downloads it); the clip is built from the camera's recording segments, so it works even when Frigate has no clip of its own, and for an event still in progress it covers the recording up to now. In-progress events show the current frame from Frigate
+- **Last** — latest N events of every camera (grouped by camera) or the history of one camera, as snapshot cards with object, score, time and zones. Click a snapshot to enlarge it. Every card has **▶ Video** (plays the clip in the page, with seeking) and **⬇** (downloads it); the clip is built from the camera's recording segments, so it works even when Frigate has no clip of its own, and for an event still in progress it covers the recording up to now. Cards load a snapshot from Frigate's clips folder, Lookout's `live/` cache, or Frigate's HTTP snapshot/thumbnail if the file is gone
 - **Stats** — events / alerts / detections for a period (24 h, today, 7 d, 30 d), cameras × objects matrix, activity by hour of day and by day. The object filter defaults to **Config** — only cameras and objects (with their `percent` thresholds) the bot is configured to send; **All** shows everything Frigate saw. Click a matrix cell to drill down; **← Back** returns to the previous view or to the overview
 - **Search** — events by camera, object, time, id, zone, recognized face or AI description (`lookout.db`)
-- **Config** — YAML editor with syntax highlighting, error underlining, line numbers, folding and search (Ctrl+F); Tab and pasted tabs become spaces. **Save** writes the file (with a `.bak` backup), **Apply** restarts the services with the saved file, **Save & apply** does both. A config with YAML errors or missing sections is not saved
+- **Config** — **Form** is a settings tree (Frigate, each camera, MQTT, Telegram, …). **+ Camera** / **Remove** add or drop cameras; the name must match Frigate's. **YAML** is the full file with highlighting, error underlining, line numbers, folding and search (Ctrl+F); Tab and pasted tabs become spaces. **Save** writes the file (with a `.bak` backup), **Apply** restarts the services with the saved file, **Save & apply** does both. A config with YAML errors or missing sections is not saved
 - **About** — version, build date, links and this manual with highlighted code
 
 Every view has its own address, with the filters in it, so it can be bookmarked or shared and the browser's Back / Forward work: `/log?camera=homecam02&type=review`, `/last?camera=homecam01&label=car`, `/stats?period=7d&label=person`, `/stats/events?period=24h&camera=homecam01&hour=8` (the events behind a stats cell or chart bar), `/search?q=person`, `/event/<id>` (one event; the time on every card links to it), `/config`, `/about`. Opening `/` shows the view seen last. The version and build date are shown in the footer of every page.
