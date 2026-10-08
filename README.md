@@ -191,7 +191,7 @@ When the `fr` section is present and `url`/`apikey` are set, enabling `fr: true`
 
 If `ai: true` is also enabled on the camera, recognized names are automatically passed to Ollama as context, enriching the description prompt. If only `fr` is enabled without `ai`, the caption is updated with recognized names directly.
 
-To set up CompreFace, use the provided `docker-compose-compreface.yml`, then open the web UI, create an application, add a Recognition Service, and upload face photos for each person via the Train section.
+To set up CompreFace, use the provided [`docker-compose-compreface.yml`](https://github.com/rsvln/lookout/blob/master/docker-compose-compreface.yml) (`docker compose -f docker-compose-compreface.yml up -d`; its web UI is on port 8000, which is the address for `fr.url`), then open the web UI, create an application, add a Recognition Service, and upload face photos for each person via the Train section.
 
 ## AI Analysis
 

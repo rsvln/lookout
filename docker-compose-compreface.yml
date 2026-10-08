@@ -1,0 +1,87 @@
+# CompreFace for Lookout's face recognition (fr: section of lookout.yml).
+# Based on the official CompreFace compose file (https://github.com/exadel-inc/CompreFace), with its .env defaults inlined,
+# so it runs as is:  docker compose -f docker-compose-compreface.yml up -d
+# The web UI is on http://<host>:8000 - this is the address for `fr.url` in lookout.yml.
+# Every value below can be overridden with an environment variable or an .env file.
+#
+# Change the database password before exposing anything to a network you don't trust.
+
+volumes:
+  postgres-data:
+
+services:
+  compreface-postgres-db:
+    image: exadel/compreface-postgres-db:${COMPREFACE_VERSION:-1.2.0}
+    container_name: compreface-postgres-db
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-frs}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  compreface-admin:
+    image: exadel/compreface-admin:${COMPREFACE_VERSION:-1.2.0}
+    container_name: compreface-admin
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_URL=jdbc:postgresql://compreface-postgres-db:5432/${POSTGRES_DB:-frs}
+      - SPRING_PROFILES_ACTIVE=dev
+      - ENABLE_EMAIL_SERVER=false
+      - ADMIN_JAVA_OPTS=${ADMIN_JAVA_OPTS:--Xmx1g}
+      - max_file_size=${MAX_FILE_SIZE:-5MB}
+      - max_request_size=${MAX_REQUEST_SIZE:-10MB}
+    depends_on:
+      - compreface-postgres-db
+      - compreface-api
+
+  compreface-api:
+    image: exadel/compreface-api:${COMPREFACE_VERSION:-1.2.0}
+    container_name: compreface-api
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_URL=jdbc:postgresql://compreface-postgres-db:5432/${POSTGRES_DB:-frs}
+      - SPRING_PROFILES_ACTIVE=dev
+      - API_JAVA_OPTS=${API_JAVA_OPTS:--Xmx2g}
+      - SAVE_IMAGES_TO_DB=${SAVE_IMAGES_TO_DB:-true}
+      - max_file_size=${MAX_FILE_SIZE:-5MB}
+      - max_request_size=${MAX_REQUEST_SIZE:-10MB}
+      - connection-timeout=${CONNECTION_TIMEOUT:-10000}
+      - read-timeout=${READ_TIMEOUT:-60000}
+    depends_on:
+      - compreface-postgres-db
+
+  compreface-fe:
+    image: exadel/compreface-fe:${COMPREFACE_VERSION:-1.2.0}
+    container_name: compreface-ui
+    restart: always
+    ports:
+      - "8000:80"
+    environment:
+      - CLIENT_MAX_BODY_SIZE=${MAX_REQUEST_SIZE:-10MB}
+      - PROXY_READ_TIMEOUT=${READ_TIMEOUT:-60000}ms
+      - PROXY_CONNECT_TIMEOUT=${CONNECTION_TIMEOUT:-10000}ms
+    depends_on:
+      - compreface-api
+      - compreface-admin
+
+  compreface-core:
+    image: exadel/compreface-core:${COMPREFACE_VERSION:-1.2.0}
+    container_name: compreface-core
+    restart: always
+    environment:
+      - ML_PORT=3000
+      - IMG_LENGTH_LIMIT=${MAX_DETECT_SIZE:-640}
+      - UWSGI_PROCESSES=${UWSGI_PROCESSES:-2}
+      - UWSGI_THREADS=${UWSGI_THREADS:-1}
+    healthcheck:
+      test: curl --fail http://localhost:3000/healthcheck || exit 1
+      interval: 10s
+      retries: 0
+      start_period: 0s
+      timeout: 1s
