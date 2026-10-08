@@ -103,6 +103,7 @@ namespace Lookout
                 Program.Log("ai", task.EventId, task.Camera, $"Processing {task.ImagePaths.Count} images, queued {(DateTime.Now - task.QueuedAt).TotalSeconds:F1}s ago");
 
                 var descriptions = new List<string>();
+                Exception failure = null;   // set only when the retry queue is on (CallAIApiAsync rethrows then)
                 int idx = 1;
                 foreach (var path in task.ImagePaths)
                 {
@@ -112,11 +113,22 @@ namespace Lookout
                         idx++;
                         continue;
                     }
-                    var desc = await CallAIApiAsync(path, task.Prompt, task.EventId, task.Camera);
-                    if (!string.IsNullOrEmpty(desc))
-                        descriptions.Add(task.ImagePaths.Count > 1 ? $"{idx}. {desc}" : desc);
+                    try
+                    {
+                        var desc = await CallAIApiAsync(path, task.Prompt, task.EventId, task.Camera);
+                        if (!string.IsNullOrEmpty(desc))
+                            descriptions.Add(task.ImagePaths.Count > 1 ? $"{idx}. {desc}" : desc);
+                    }
+                    catch (Exception ex)
+                    {
+                        failure = ex;
+                    }
                     idx++;
                 }
+
+                // Ollama is unreachable: the whole task is repeated later instead of posting a partial description.
+                if (failure != null && RetryQueue.IsTransient(failure) && RetryQueue.TrySchedule("ai", task, task.RetryAttempt, task.EventId, task.Camera, failure))
+                    return;
 
                 if (descriptions.Count == 0)
                 {
@@ -124,7 +136,17 @@ namespace Lookout
                     return;
                 }
 
-                await UpdateTelegramMessageAsync(task, string.Join("\n\n", descriptions));
+                try
+                {
+                    await UpdateTelegramMessageAsync(task, string.Join("\n\n", descriptions));
+                }
+                catch (Exception ex) when (RetryQueue.Enabled)
+                {
+                    // Telegram is unreachable (the retry queue is on, so the failure was passed on): repeat the task later.
+                    if (RetryQueue.IsTransient(ex) && RetryQueue.TrySchedule("ai", task, task.RetryAttempt, task.EventId, task.Camera, ex))
+                        return;
+                    throw;
+                }
                 Program.Log("ai", task.EventId, task.Camera, "Task completed");
             }
             catch (Exception ex)
@@ -224,6 +246,9 @@ namespace Lookout
             catch (Exception ex)
             {
                 Program.Log("ai", eventId, camera, $"API call failed: {ex.Message}");
+                Metrics.Inc("lookout_ollama_errors_total");
+                if (RetryQueue.Enabled)
+                    throw;
                 return null;
             }
         }
@@ -248,6 +273,9 @@ namespace Lookout
             catch (Exception ex)
             {
                 Program.Log("ai", task.EventId, task.Camera, $"Failed to update Telegram message: {ex.Message}");
+                Metrics.Inc("lookout_telegram_errors_total");
+                if (RetryQueue.Enabled)
+                    throw;
             }
         }
 

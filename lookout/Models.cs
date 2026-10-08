@@ -144,7 +144,11 @@ namespace Lookout
         public int timeout { get; set; } = 300;
         public int retry { get; set; } = 10;
         public bool sendeverythingwhatyouhave { get; set; } = true;
-        public int gifwidth { get; set; } = 640;     
+        public int gifwidth { get; set; } = 640;
+        // Retry queue for Telegram / Ollama / CompreFace outages: how many times a failed job is repeated (0 = off)
+        // and the first delay in seconds, doubled for every next repeat.
+        public int retrymax { get; set; } = 0;
+        public int retrybackoff { get; set; } = 30;
         public LocaleSettings locale { get; set; } = new LocaleSettings();
     }
 
@@ -310,6 +314,8 @@ namespace Lookout
         public DateTime QueuedAt { get; set; }
         public string OriginalCaption { get; set; }
         public string Prompt { get; set; }
+        // How many times the retry queue has already repeated this task (0 = first run).
+        public int RetryAttempt { get; set; }
     }
 
     public class AIResponse

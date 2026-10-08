@@ -60,6 +60,7 @@ namespace Lookout
                         if (EventPasses(settings.frigate.cameras[cami], fe.after))
                         {
                             Log("event", fe.after.id, fe.after.camera, "Event end received");
+                            Metrics.Inc("lookout_events_total", "source", "event", "type", "end");
                             _ = Task.Run(() => FrigateEventEndWorker(fe: fe));
                         }
                     }
@@ -77,6 +78,7 @@ namespace Lookout
                         if (EventPasses(settings.frigate.cameras[cami], fe.after))
                         {
                             Log("event", fe.after.id, fe.after.camera, "Event new received");
+                            Metrics.Inc("lookout_events_total", "source", "event", "type", "new");
                             _ = Task.Run(() => FrigateEventNewWorker(fe: fe));
                         }
                     }
@@ -119,6 +121,7 @@ namespace Lookout
                         if (ReviewPasses(settings.frigate.cameras[cami], fr))
                         {
                             Log("review", fr.after.id, fr.after.camera, "Review end received");
+                            Metrics.Inc("lookout_events_total", "source", "review", "type", "end");
                             _ = Task.Run(() => FrigateReviewEndWorker(fr: fr));
                         }
                     }
@@ -138,6 +141,7 @@ namespace Lookout
                         if (ReviewPasses(settings.frigate.cameras[cami], fr))
                         {
                             Log("review", fr.after.id, fr.after.camera, "Review new/update received");
+                            Metrics.Inc("lookout_events_total", "source", "review", "type", "new");
                             _ = Task.Run(() => FrigateReviewNewWorker(fr: fr));
                         }
                     }

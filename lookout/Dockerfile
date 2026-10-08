@@ -27,4 +27,7 @@ RUN dotnet publish "./lookout.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+# 503 from /health (MQTT down, Frigate unreachable, ...) marks the container unhealthy; start-period covers the first connect.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -fsS http://localhost:8888/health || exit 1
 ENTRYPOINT ["dotnet", "lookout.dll"]

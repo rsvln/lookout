@@ -13,6 +13,8 @@ namespace Lookout
         public string OriginalCaption { get; set; }
         public string AIPrompt { get; set; }
         public DateTime QueuedAt { get; set; }
+        // How many times the retry queue has already repeated this task (0 = first run).
+        public int RetryAttempt { get; set; }
     }
 
     public class FRQueueService
@@ -108,6 +110,7 @@ namespace Lookout
                 Program.Log("fr", task.EventId, task.Camera, $"Processing {task.ImagePaths.Count} images, queued {(DateTime.Now - task.QueuedAt).TotalSeconds:F1}s ago");
 
                 var allNames = new List<string>();
+                Exception failure = null;
 
                 foreach (var path in task.ImagePaths)
                 {
@@ -117,11 +120,22 @@ namespace Lookout
                         continue;
                     }
 
-                    var names = await CallFRApiAsync(path, task.EventId, task.Camera);
-                    foreach (var name in names)
-                        if (!allNames.Contains(name))
-                            allNames.Add(name);
+                    try
+                    {
+                        var names = await CallFRApiAsync(path, task.EventId, task.Camera);
+                        foreach (var name in names)
+                            if (!allNames.Contains(name))
+                                allNames.Add(name);
+                    }
+                    catch (Exception ex)
+                    {
+                        failure = ex;   // only when the retry queue is on (CallFRApiAsync rethrows then)
+                    }
                 }
+
+                // CompreFace is unreachable: the task is repeated later, before anything is forwarded to the AI.
+                if (failure != null && RetryQueue.IsTransient(failure) && RetryQueue.TrySchedule("fr", task, task.RetryAttempt, task.EventId, task.Camera, failure))
+                    return;
 
                 Program.Log("fr", task.EventId, task.Camera, allNames.Count > 0
                     ? $"Recognized: {string.Join(", ", allNames)}"
@@ -191,6 +205,9 @@ namespace Lookout
             catch (Exception ex)
             {
                 Program.Log("fr", eventId, camera, $"API call failed: {ex.Message}");
+                Metrics.Inc("lookout_compreface_errors_total");
+                if (RetryQueue.Enabled)
+                    throw;
             }
             return result;
         }
@@ -208,6 +225,7 @@ namespace Lookout
             catch (Exception ex)
             {
                 Program.Log("fr", task.EventId, task.Camera, $"Failed to update Telegram message: {ex.Message}");
+                Metrics.Inc("lookout_telegram_errors_total");
             }
         }
 

@@ -21,7 +21,8 @@ namespace Lookout
                 app.Use(async (context, next) =>
                 {
                     var web = Program.settings?.web;
-                    if (web == null || string.IsNullOrEmpty(web.user) || string.IsNullOrEmpty(web.password) || IsAuthorized(context.Request, web))
+                    if (web == null || string.IsNullOrEmpty(web.user) || string.IsNullOrEmpty(web.password)
+                        || openPaths.Contains(context.Request.Path.Value) || IsAuthorized(context.Request, web))
                     {
                         await next();
                         return;
@@ -36,6 +37,7 @@ namespace Lookout
                 MapMediaApi(app);
                 MapConfigApi(app, configPath);
                 MapStatusApi(app);
+                MapOpsApi(app);
 
                 app.Run();
             });

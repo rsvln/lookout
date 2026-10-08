@@ -20,8 +20,10 @@ namespace Lookout
 {
     internal partial class Program
     {
-        async static Task FrigateReviewNewWorker(FrigateReview fr)
+        // `attempt` is 0 for the original run and the retry number when the retry queue repeats the worker.
+        async static Task FrigateReviewNewWorker(FrigateReview fr, int attempt = 0)
         {
+            RetryQueue.BeginRun();
             try
             {
                 string camera = fr.after.camera;
@@ -107,6 +109,8 @@ namespace Lookout
             catch (Exception ex)
             {
                 Log("review", fr.after.id, fr.after.camera, "Error while review new/update worker: " + ex.Message);
+                Metrics.Inc("lookout_worker_errors_total", "worker", "review-new");
+                RetryQueue.FailWorker("review-new", fr, attempt, fr.after.id, fr.after.camera, ex);
             }
         }
 
@@ -285,8 +289,9 @@ namespace Lookout
             }
         }
 
-        async static Task FrigateReviewEndWorker(FrigateReview fr)
+        async static Task FrigateReviewEndWorker(FrigateReview fr, int attempt = 0)
         {
+            RetryQueue.BeginRun();
             try
             {
                 string camera = fr.after.camera;
@@ -385,6 +390,7 @@ namespace Lookout
                     var sqlq = (sql: new Queries().getEventQuery("review", true), id: fr.after.id, camera: fr.after.camera);
                     SQLitePCL.raw.SetProvider(new SQLitePCL.SQLite3Provider_e_sqlite3());
                     bool isSuccess = false;
+                    var waitSw = Stopwatch.StartNew();
 
                     while (secs <= settings.options.timeout)
                     {
@@ -394,6 +400,7 @@ namespace Lookout
                         if (dr.HasRows)
                         {
                             isSuccess = true;
+                            Metrics.Observe(waitSw.Elapsed.TotalSeconds);
                             Log("review", fr.after.id, camera, "All recordings are ready");
 
                             if (settings.frigate.cameras[cami].trueend)
@@ -432,6 +439,7 @@ namespace Lookout
 
                     if (!isSuccess)
                     {
+                        Metrics.Observe(waitSw.Elapsed.TotalSeconds);
                         if (settings.options.sendeverythingwhatyouhave)
                         {
                             Log("review", fr.after.id, camera, "Timeout expired, video files were not ready. Trying to send everything the frigate has");
@@ -480,6 +488,8 @@ namespace Lookout
             catch (Exception ex)
             {
                 Log("review", fr.after.id, fr.after.camera, "Error in review end worker: " + ex.Message);
+                Metrics.Inc("lookout_worker_errors_total", "worker", "review-end");
+                RetryQueue.FailWorker("review-end", fr, attempt, fr.after.id, fr.after.camera, ex);
             }
         }
 

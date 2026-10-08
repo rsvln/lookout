@@ -68,6 +68,9 @@ namespace Lookout
             L10n.Load(loc.web, loc.telegram, loc.ai);
             Log("app", "", "", "Languages: web " + L10n.Web.Locale + ", telegram " + L10n.Tg.Locale + ", ai " + L10n.Ai.Locale);
 
+            RegisterRetryHandlers();
+            RetryQueue.Start();
+
             if (goAI) { aiQueue.Stop(); goAI = false; }
             if (goFR) { frQueue.Stop(); goFR = false; }
 
@@ -171,6 +174,7 @@ namespace Lookout
                     try
                     {
                         var result = await call();
+                        RetryQueue.MarkSent();
                         await Task.Delay(50);
                         return result;
                     }
@@ -178,7 +182,13 @@ namespace Lookout
                     {
                         int wait = (ex.Parameters?.RetryAfter ?? settings.telegram.retryonratelimit) * 1000;
                         Log(type, eventId, camera, $"Telegram rate limit, waiting {wait / 1000}s");
+                        Metrics.Inc("lookout_telegram_rate_limited_total");
                         await Task.Delay(wait);
+                    }
+                    catch (Exception)
+                    {
+                        Metrics.Inc("lookout_telegram_errors_total");
+                        throw;
                     }
                 }
             }
