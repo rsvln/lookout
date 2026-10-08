@@ -1,0 +1,159 @@
+﻿<!DOCTYPE html>
+<html lang="{{web.lang}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lookout</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=%VERSION%">
+<link rel="stylesheet" href="/css/app.css?v=%VERSION%">
+</head>
+<body>
+
+<header>
+  <div class="dot"></div>
+  <h1><a href="/log">Frigate Lookout</a></h1>
+  <div class="tabs">
+    <a class="tab" data-tab="log" href="/log">{{web.tab.log}}</a>
+    <a class="tab" data-tab="last" href="/last">{{web.tab.last}}</a>
+    <a class="tab" data-tab="stats" href="/stats">{{web.tab.stats}}</a>
+    <a class="tab" data-tab="config" href="/config">{{web.tab.config}}</a>
+    <a class="tab" data-tab="about" href="/about">{{web.tab.about}}</a>
+  </div>
+</header>
+
+<div class="panels">
+
+  <div class="panel active" id="panel-log">
+    <div class="log-toolbar">
+      <label>{{web.lines}}</label>
+      <input type="number" id="log-lines" value="200" min="10" max="2000" style="width:70px">
+      <button class="btn" onclick="loadLog()">{{web.refresh}}</button>
+      <label>{{web.type}}</label>
+        <select id="filter-type" onchange="navigate(logUrl())">
+          <option value="">{{web.all}}</option>
+          <option value="review">review</option>
+          <option value="event">event</option>
+          <option value="app">app</option>
+          <option value="ai">ai</option>
+          <option value="tg">tg</option>
+        </select>
+
+        <label>{{web.camera}}</label>
+        <select id="filter-camera" onchange="navigate(logUrl())"><option value="">{{web.all}}</option></select>
+
+        <label>{{web.text}}</label>
+        <input type="text" id="filter-text" placeholder="{{web.search_placeholder}}" 
+               oninput="navigate(logUrl(), true)" style="width:130px">
+
+        <button class="btn" onclick="clearFilters()">{{web.clear}}</button>
+
+      <div class="autoscroll-toggle">
+        <label>{{web.autorefresh}}</label>
+        <select id="refresh-interval" onchange="setRefresh()">
+          <option value="0">{{web.off}}</option>
+          <option value="5000" selected>5s</option>
+          <option value="10000">10s</option>
+          <option value="30000">30s</option>
+        </select>
+      </div>
+    </div>
+    <div id="log-container"></div>
+  </div>
+
+  <div class="panel" id="panel-last">
+    <div class="log-toolbar">
+      <label>{{web.camera}}</label>
+      <select id="last-camera" class="meta-camera" onchange="navigate(lastUrl({ limit: '' }))"><option value="">{{web.all}}</option></select>
+      <label>{{web.object}}</label>
+      <select id="last-label" class="meta-label" onchange="navigate(lastUrl())"><option value="">{{web.all}}</option></select>
+      <label id="last-limit-label">{{web.per_camera}}</label>
+      <select id="last-limit" onchange="navigate(lastUrl())">
+        <option value="1" selected>1</option>
+        <option value="3">3</option>
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+      </select>
+      <button class="btn" onclick="loadLast()">{{web.refresh}}</button>
+      <div class="autoscroll-toggle">
+        <label>{{web.autorefresh}}</label>
+        <select id="last-refresh" onchange="setLastRefresh()">
+          <option value="0">{{web.off}}</option>
+          <option value="10000">10s</option>
+          <option value="30000" selected>30s</option>
+          <option value="60000">60s</option>
+        </select>
+      </div>
+    </div>
+    <div class="scroll"><div id="last-cards"></div></div>
+  </div>
+
+  <div class="panel" id="panel-stats">
+    <div class="log-toolbar">
+      <label>{{web.period}}</label>
+      <select id="stat-period" onchange="navigate(statsUrl())">
+        <option value="24h" selected>{{web.period.24h}}</option>
+        <option value="today">{{web.period.today}}</option>
+        <option value="7d">{{web.period.7d}}</option>
+        <option value="30d">{{web.period.30d}}</option>
+      </select>
+      <label>{{web.camera}}</label>
+      <select id="stat-camera" class="meta-camera" onchange="navigate(statsUrl())"><option value="">{{web.all}}</option></select>
+      <label>{{web.object}}</label>
+      <select id="stat-label" class="meta-label" onchange="navigate(statsUrl())"><option value="config">{{web.filter_config}}</option><option value="">{{web.all}}</option></select>
+      <button class="btn" onclick="loadStats()">{{web.refresh}}</button>
+      <button class="btn" id="stat-back" onclick="statBack()" style="display:none">← {{web.back}}</button>
+    </div>
+    <div class="scroll" id="stats-body"></div>
+  </div>
+
+  <div class="panel" id="panel-event">
+    <div class="log-toolbar">
+      <button class="btn" onclick="goBack('/last')">← {{web.back}}</button>
+    </div>
+    <div class="scroll" id="event-body"></div>
+  </div>
+
+  <div class="panel" id="panel-config">
+    <div class="config-toolbar">
+      <button class="btn" onclick="saveConfig(false)">{{web.config.save}}</button>
+      <button class="btn" onclick="applyConfig()">{{web.config.apply}}</button>
+      <button class="btn primary" onclick="saveConfig(true)">{{web.config.save_apply}}</button>
+      <span class="config-hint">{{web.config.hint}}</span>
+    </div>
+    <div id="config-editor-host" style="display:none"></div>
+    <textarea id="config-editor" spellcheck="false"></textarea>
+  </div>
+
+  <div class="panel" id="panel-about">
+    <div class="scroll">
+      <div class="about-head">
+        <div class="about-name">Lookout</div>
+        <div class="about-meta">
+          <span>{{web.about.version}} <b>%VERSION%</b></span>
+          <span>{{web.about.build}} <b>%BUILD%</b></span>
+          <a href="%URL%" target="_blank" rel="noopener">GitHub</a>
+          <a href="%URL%/releases" target="_blank" rel="noopener">{{web.about.changes}}</a>
+          <span>MIT</span>
+        </div>
+      </div>
+      <div class="markdown" id="about-readme"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="app-footer">
+  <span>Lookout <b>v%VERSION%</b></span>
+  <span>{{web.about.build}} %BUILD%</span>
+  <a href="%URL%" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<div class="toast" id="toast"></div>
+<div class="busy" id="busy"><div class="spinner"></div><div id="busy-text"></div></div>
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)"><img id="lightbox-img" alt=""><video id="lightbox-video" controls playsinline></video></div>
+
+<script src="/js/app.js?v=%VERSION%"></script>
+</body>
+</html>
