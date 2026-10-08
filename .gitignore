@@ -361,6 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Cursor IDE (local rules, not part of the app)
+.cursor/
+
 # Local development notes
 DEVELOPMENT.md
 
