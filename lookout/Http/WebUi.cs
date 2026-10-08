@@ -17,20 +17,10 @@ namespace Lookout
                 builder.Logging.ClearProviders();
                 var app = builder.Build();
 
-                // Optional HTTP Basic auth for the whole UI and API (web.user / web.password in the config).
-                app.Use(async (context, next) =>
-                {
-                    var web = Program.settings?.web;
-                    if (web == null || string.IsNullOrEmpty(web.user) || string.IsNullOrEmpty(web.password)
-                        || openPaths.Contains(context.Request.Path.Value) || IsAuthorized(context.Request, web))
-                    {
-                        await next();
-                        return;
-                    }
-                    context.Response.Headers["WWW-Authenticate"] = "Basic realm=\"Lookout\", charset=\"UTF-8\"";
-                    context.Response.StatusCode = 401;
-                });
+                // Access control (web.user / web.password / web.users, see WebAuth); open when nothing is configured.
+                app.Use(Authorize);
 
+                MapAuthApi(app);
                 MapPages(app);
                 MapLogApi(app);
                 MapEventApi(app);
@@ -44,23 +34,6 @@ namespace Lookout
         }
 
         record ConfigPayload(string content, bool apply);
-
-        static bool IsAuthorized(HttpRequest request, WebSettings web)
-        {
-            string header = request.Headers.Authorization.ToString();
-            if (!header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
-                return false;
-            string decoded;
-            try { decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(header.Substring(6).Trim())); }
-            catch (FormatException) { return false; }
-            int colon = decoded.IndexOf(':');
-            if (colon < 0)
-                return false;
-            // Constant-time comparison, so the password can't be guessed from response timing.
-            static bool Same(string a, string b) => System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(a), System.Text.Encoding.UTF8.GetBytes(b));
-            return Same(decoded.Substring(0, colon), web.user) & Same(decoded.Substring(colon + 1), web.password);
-        }
 
         static readonly SemaphoreSlim applyLock = new SemaphoreSlim(1, 1);
 

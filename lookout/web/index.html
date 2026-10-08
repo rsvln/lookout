@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lookout</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=%VERSION%">
+<link rel="apple-touch-icon" href="/icon/180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
 <link rel="stylesheet" href="/css/app.css?v=%VERSION%">
 </head>
 <body>
@@ -16,8 +19,13 @@
     <a class="tab" data-tab="log" href="/log">{{web.tab.log}}</a>
     <a class="tab" data-tab="last" href="/last">{{web.tab.last}}</a>
     <a class="tab" data-tab="stats" href="/stats">{{web.tab.stats}}</a>
-    <a class="tab" data-tab="config" href="/config">{{web.tab.config}}</a>
+    <a class="tab" data-tab="search" href="/search">{{web.tab.search}}</a>
+    <a class="tab" data-tab="config" href="/config" id="tab-config">{{web.tab.config}}</a>
     <a class="tab" data-tab="about" href="/about">{{web.tab.about}}</a>
+  </div>
+  <div class="userbox" id="userbox" hidden>
+    <span id="user-name"></span>
+    <button class="btn" type="button" onclick="logout()">{{web.logout}}</button>
   </div>
 </header>
 
@@ -103,9 +111,28 @@
       <label>{{web.object}}</label>
       <select id="stat-label" class="meta-label" onchange="navigate(statsUrl())"><option value="config">{{web.filter_config}}</option><option value="">{{web.all}}</option></select>
       <button class="btn" onclick="loadStats()">{{web.refresh}}</button>
+      <a class="btn" id="stat-csv" href="#" download>{{web.export.csv}}</a>
+      <a class="btn" id="stat-json" href="#" download>{{web.export.json}}</a>
       <button class="btn" id="stat-back" onclick="statBack()" style="display:none">← {{web.back}}</button>
     </div>
     <div class="scroll" id="stats-body"></div>
+  </div>
+
+  <div class="panel" id="panel-search">
+    <div class="log-toolbar">
+      <label>{{web.search.query}}</label>
+      <input type="text" id="search-q" placeholder="{{web.search_placeholder}}" style="width:180px" onkeydown="if(event.key==='Enter')navigate(searchUrl())">
+      <label>{{web.camera}}</label>
+      <select id="search-camera" class="meta-camera" onchange="navigate(searchUrl())"><option value="">{{web.all}}</option></select>
+      <label>{{web.object}}</label>
+      <select id="search-label" class="meta-label" onchange="navigate(searchUrl())"><option value="">{{web.all}}</option></select>
+      <label>{{web.search.from}}</label>
+      <input type="datetime-local" id="search-from" onchange="navigate(searchUrl())">
+      <label>{{web.search.to}}</label>
+      <input type="datetime-local" id="search-to" onchange="navigate(searchUrl())">
+      <button class="btn" onclick="navigate(searchUrl())">{{web.search.submit}}</button>
+    </div>
+    <div class="scroll" id="search-body"><div class="empty">{{web.search.hint}}</div></div>
   </div>
 
   <div class="panel" id="panel-event">
@@ -117,13 +144,18 @@
 
   <div class="panel" id="panel-config">
     <div class="config-toolbar">
+      <button class="btn" id="config-mode-form" onclick="setConfigMode('form')">{{web.config.form}}</button>
+      <button class="btn" id="config-mode-yaml" onclick="setConfigMode('yaml')">{{web.config.yaml}}</button>
       <button class="btn" onclick="saveConfig(false)">{{web.config.save}}</button>
       <button class="btn" onclick="applyConfig()">{{web.config.apply}}</button>
       <button class="btn primary" onclick="saveConfig(true)">{{web.config.save_apply}}</button>
       <span class="config-hint">{{web.config.hint}}</span>
     </div>
-    <div id="config-editor-host" style="display:none"></div>
-    <textarea id="config-editor" spellcheck="false"></textarea>
+    <div id="config-form" class="scroll settings-form"></div>
+    <div id="config-yaml">
+      <div id="config-editor-host" style="display:none"></div>
+      <textarea id="config-editor" spellcheck="false"></textarea>
+    </div>
   </div>
 
   <div class="panel" id="panel-about">

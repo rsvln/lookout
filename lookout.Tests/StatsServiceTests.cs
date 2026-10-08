@@ -90,6 +90,24 @@ namespace Lookout.Tests
             Assert.Equal(1, st.matrix["front"]["car"]);
             Assert.Equal(3, st.hours.Sum());
             Assert.Equal(3, st.days.Sum(d => d.count));
+            Assert.Equal(3, st.heatmap.Sum(row => row.Sum()));
+            Assert.Contains("front,person,1", StatsService.ToCsv(st, "matrix"));
+            Assert.StartsWith("hour,count", StatsService.ToCsv(st, "hours"));
+            Assert.StartsWith("weekday,hour,count", StatsService.ToCsv(st, "heatmap"));
+        }
+
+        [Fact]
+        public void Search_MatchesIdCameraLabelAndZone()
+        {
+            TestEnv.AddEvent(db, "abc-1", "front", "person", 0.9, TestEnv.Now(-60), zones: "[\"porch\"]");
+            TestEnv.AddEvent(db, "xyz-2", "yard", "car", 0.9, TestEnv.Now(-30), zones: "[\"gate\"]");
+
+            Assert.Equal("abc-1", Assert.Single(StatsService.Search("abc", null, null, null, null, 10, out int total)).id);
+            Assert.Equal(1, total);
+            Assert.Equal("xyz-2", Assert.Single(StatsService.Search("gate", null, null, null, null, 10, out _)).id);
+            Assert.Equal("abc-1", Assert.Single(StatsService.Search(null, "front", "person", null, null, 10, out _)).id);
+            Assert.Empty(StatsService.Search("nobody", null, null, null, null, 10, out int none));
+            Assert.Equal(0, none);
         }
 
         [Fact]

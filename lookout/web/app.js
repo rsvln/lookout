@@ -3,7 +3,7 @@
 // Every view has its own address: /log, /last, /stats, /stats/events (a gallery from the stats), /event/<id>,
 // /config, /about, with the filters in the query string. So F5 shows the same view, links can be shared and
 // the browser's Back / Forward move between views. "/" opens the view seen last.
-const TABS = ['log', 'last', 'stats', 'config', 'about'];
+const TABS = ['log', 'last', 'stats', 'search', 'config', 'about'];
 const val = id => document.getElementById(id).value;
 
 // Settings that are not part of a view (lines, refresh intervals) and the last address of every tab
@@ -41,6 +41,7 @@ function parseRoute() {
   const q = Object.fromEntries(new URLSearchParams(location.search));
   if (parts[0] === 'event' && parts[1]) return { view: 'event', id: parts[1], q };
   if (parts[0] === 'stats' && parts[1] === 'events') return { view: 'stats', gallery: true, q };
+  if (parts[0] === 'search') return { view: 'search', q };
   return { view: TABS.includes(parts[0]) ? parts[0] : 'log', q };
 }
 
@@ -93,7 +94,7 @@ document.addEventListener('click', e => {
   const a = e.target.closest('a[href^="/"]');
   if (!a || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || a.target || a.hasAttribute('download')) return;
   const url = new URL(a.href);
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/js/')) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/js/') || url.pathname.startsWith('/css/') || url.pathname === '/login') return;
   e.preventDefault();
   const tab = a.dataset.tab;
   if (tab) navigate(parseRoute().view === tab ? '/' + tab : (readPrefs().urls || {})[tab] || '/' + tab);
@@ -135,7 +136,16 @@ async function render() {
     loadStats();
   } else if (r.view === 'event') {
     loadEvent(r.id);
+  } else if (r.view === 'search') {
+    await loadMeta();
+    setSelect('search-camera', q.camera || '');
+    setSelect('search-label', q.label || '');
+    document.getElementById('search-q').value = q.q || '';
+    document.getElementById('search-from').value = q.from || '';
+    document.getElementById('search-to').value = q.to || '';
+    if (q.q || q.camera || q.label || q.from || q.to) loadSearch();
   } else if (r.view === 'config') {
+    if (ME.role && ME.role !== 'admin') { navigate('/log', true); return; }
     loadConfig();
   } else if (r.view === 'about') {
     loadAbout();
@@ -229,6 +239,7 @@ async function loadLast() {
 // Inline icons, drawn in the button's text color.
 const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>';
 const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 15v5h16v-5"/></svg>';
+const ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="M8.2 10.8l7.6-5.1M8.2 13.2l7.6 5.1"/></svg>';
 
 function eventCard(r) {
   return `
@@ -245,6 +256,7 @@ function eventCard(r) {
         <div class="actions">
           <button class="act" data-id="${esc(r.id)}" onclick="openVideo(this.dataset.id)">${ICON_PLAY} ${esc(t('web.video'))}</button>
           <a class="act" href="/api/clip/${encodeURIComponent(r.id)}?download=1" title="${esc(t('web.download'))}">${ICON_DOWNLOAD}</a>
+          <button class="act" data-id="${esc(r.id)}" onclick="shareClip(this.dataset.id)" title="${esc(t('web.share_clip'))}">${ICON_SHARE}</button>
         </div>
       </div>
     </div>`;
@@ -298,6 +310,43 @@ function closeLightbox(e) {
 }
 
 // onClick(i) is the name of a function called with the bar's index; bars with a value become clickable.
+function heatmapHtml(h) {
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(d => t('web.weekday.' + d));
+  const max = Math.max(1, ...h.flat());
+  const head = `<div></div>` + [...Array(24)].map((_, i) => `<div class="heat-h">${i}</div>`).join('');
+  const rows = h.map((hrs, d) => `<div class="heat-lab">${esc(days[d])}</div>` + hrs.map((v, hour) =>
+    `<div class="heat-cell${v ? ' clickable' : ''}" style="background:rgba(88,166,255,${v ? (0.12 + 0.88 * v / max).toFixed(2) : 0.04})" title="${esc(days[d])} ${String(hour).padStart(2, '0')}:00 — ${v}"${v ? ` onclick="statHourClick(${hour})"` : ''}></div>`
+  ).join('')).join('');
+  return `<div class="section"><h3>${t('web.heatmap')}</h3><div class="heatmap">${head}${rows}</div></div>`;
+}
+
+function searchUrl() {
+  return buildUrl('/search', { q: val('search-q'), camera: val('search-camera'), label: val('search-label'), from: val('search-from'), to: val('search-to') });
+}
+
+async function loadSearch() {
+  const p = new URLSearchParams();
+  ['q', 'camera', 'label', 'from', 'to'].forEach(k => { const v = val('search-' + (k === 'q' ? 'q' : k)); if (v) p.set(k === 'q' ? 'q' : k, v); });
+  const body = document.getElementById('search-body');
+  const res = await fetch('/api/search?' + p);
+  if (!res.ok) { body.innerHTML = `<div class="empty">${esc(t('web.error_events'))}</div>`; return; }
+  const data = await res.json();
+  const more = data.total > data.events.length ? ` <span style="color:var(--muted)">${esc(t('web.gallery.shown', data.events.length, data.total))}</span>` : '';
+  body.innerHTML = data.events.length
+    ? `<div class="section"><h3>${esc(t('web.gallery.count', data.total))}${more}</h3><div class="cards">${data.events.map(eventCard).join('')}</div></div>`
+    : `<div class="empty">${esc(t('web.search.empty'))}</div>`;
+}
+
+async function shareClip(id) {
+  try {
+    const res = await fetch('/api/sign/clip/' + encodeURIComponent(id));
+    const data = await res.json();
+    if (!res.ok || !data.url) throw new Error();
+    await navigator.clipboard.writeText(data.url);
+    showToast(t('web.share_copied'), 'ok');
+  } catch { showToast(t('web.share_failed'), 'err'); }
+}
+
 function barChart(values, labels, peakIdx, onClick) {
   const max = Math.max(1, ...values);
   return `<div class="bars">${values.map((v, i) => `
@@ -416,8 +465,15 @@ async function loadStats() {
   statDays = st.days.map(d => d.day);
   if (st.days.length > 2)
     html += `<div class="section"><h3>${t('web.by_day')}</h3>${barChart(st.days.map(d => d.count), st.days.map(d => d.day.slice(8) + '.' + d.day.slice(5, 7)), -1, 'statDayClick')}</div>`;
+  if (st.heatmap) html += heatmapHtml(st.heatmap);
 
   body.innerHTML = html;
+  const exp = new URLSearchParams({ period: document.getElementById('stat-period').value, format: 'csv' });
+  if (cam) exp.set('camera', cam);
+  if (lbl) exp.set('label', lbl);
+  document.getElementById('stat-csv').href = '/api/stat?' + exp;
+  exp.set('format', 'json');
+  document.getElementById('stat-json').href = '/api/stat?' + exp;
 }
 
 function setRefresh() {
@@ -542,10 +598,53 @@ function getConfigEditor() {
   })();
 }
 
-async function loadConfig() {
+let configMode = 'form';
+
+function setConfigMode(mode) {
+  configMode = mode;
+  document.getElementById('config-form').style.display = mode === 'form' ? '' : 'none';
+  document.getElementById('config-yaml').style.display = mode === 'yaml' ? 'flex' : 'none';
+  document.getElementById('config-mode-form').classList.toggle('primary', mode === 'form');
+  document.getElementById('config-mode-yaml').classList.toggle('primary', mode === 'yaml');
+  if (mode === 'yaml') loadConfigYaml();
+  else loadConfigForm();
+}
+
+async function loadConfig() { setConfigMode(configMode); }
+
+async function loadConfigYaml() {
   const res = await fetch('/api/config');
+  if (!res.ok) return;
   const data = await res.json();
   (await getConfigEditor()).setValue(data.content);
+}
+
+function fieldInput(f) {
+  if (f.type === 'checkbox')
+    return `<label class="chk"><input type="checkbox" data-path="${esc(f.path)}"${f.value === 'true' ? ' checked' : ''}> ${esc(f.label)}</label>`;
+  if (f.type === 'select')
+    return `<label>${esc(f.label)}<select data-path="${esc(f.path)}">${(f.options || []).map(o => `<option${o === f.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+  if (f.type === 'textarea')
+    return `<label>${esc(f.label)}<textarea data-path="${esc(f.path)}" rows="3">${esc(f.value)}</textarea></label>`;
+  const type = f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text';
+  return `<label>${esc(f.label)}<input type="${type}" data-path="${esc(f.path)}" value="${esc(f.value)}"${type === 'password' ? ' autocomplete="new-password"' : ''}></label>`;
+}
+
+async function loadConfigForm() {
+  const host = document.getElementById('config-form');
+  const res = await fetch('/api/settings');
+  if (!res.ok) { host.innerHTML = `<div class="empty">${esc(t('web.config.invalid', res.status))}</div>`; return; }
+  const data = await res.json();
+  host.innerHTML = (data.groups || []).map(g => `<section class="settings-group"><h3>${esc(g.title)}</h3><div class="settings-grid">${g.fields.map(fieldInput).join('')}</div></section>`).join('')
+    + (data.cameras || []).map(c => `<section class="settings-group"><h3>📷 ${esc(c.camera)}</h3><div class="settings-grid cams">${c.fields.map(fieldInput).join('')}</div></section>`).join('');
+}
+
+function collectFields() {
+  const fields = {};
+  document.querySelectorAll('#config-form [data-path]').forEach(el => {
+    fields[el.dataset.path] = el.type === 'checkbox' ? (el.checked ? 'true' : 'false') : el.value;
+  });
+  return fields;
 }
 
 function setBusy(text) {
@@ -590,10 +689,12 @@ async function waitForService() {
 }
 
 async function saveConfig(apply) {
-  const content = (await getConfigEditor()).getValue();
   setBusy(apply ? t('web.config.applying') : t('web.config.saving'));
   try {
-    if (!await configRequest('/api/config', { content, apply })) return;
+    const ok = configMode === 'form'
+      ? await configRequest('/api/settings', { fields: collectFields(), apply })
+      : await configRequest('/api/config', { content: (await getConfigEditor()).getValue(), apply });
+    if (!ok) return;
     if (apply) { setBusy(t('web.config.waiting')); await waitForService(); }
     else showToast(t('web.config.saved'), 'ok');
   } finally {
@@ -621,6 +722,27 @@ function showToast(msg, type) {
 }
 
 
+let ME = { role: 'admin', auth: 'none', user: null };
+
+async function loadWhoami() {
+  try {
+    const res = await fetch('/api/whoami');
+    if (res.ok) ME = await res.json();
+  } catch { }
+  const cfg = document.getElementById('tab-config');
+  if (cfg) cfg.style.display = ME.role === 'admin' || !ME.role || ME.role === 'none' ? '' : 'none';
+  const box = document.getElementById('userbox');
+  if (box && ME.auth === 'form' && ME.user) {
+    box.hidden = false;
+    document.getElementById('user-name').textContent = ME.user;
+  }
+}
+
+async function logout() {
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/login';
+}
+
 // Start: settings from this browser (taken over once from frte2tg, the app's old name), then the view of the address.
 (() => {
   let fields = readPrefs().fields;
@@ -637,7 +759,8 @@ function showToast(msg, type) {
   history.replaceState({ n: navIndex }, '', start);
   loadLog();
   setRefresh();
-  render();
+  loadWhoami().then(render);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 })();
 
 // Result of "apply" that reloaded the page for a new language.

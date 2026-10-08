@@ -6,11 +6,24 @@ namespace Lookout
         static void MapPages(WebApplication app)
         {
             // The page itself, at every address it handles (the script picks the view from the path).
-            foreach (var path in new[] { "/", "/log", "/last", "/stats", "/stats/events", "/config", "/about", "/event/{id}" })
+            foreach (var path in new[] { "/", "/log", "/last", "/stats", "/stats/events", "/config", "/about", "/search", "/event/{id}" })
                 app.MapGet(path, () => Results.Content(Localize(Asset("index.html")), "text/html; charset=utf-8"));
 
             app.MapGet("/js/app.js", () => Results.Content(Localize(Asset("app.js")), "text/javascript; charset=utf-8"));
             app.MapGet("/css/app.css", () => Results.Content(Asset("app.css"), "text/css; charset=utf-8"));
+
+            app.MapGet("/manifest.webmanifest", () => Results.Content(Asset("manifest.webmanifest"), "application/manifest+json; charset=utf-8"));
+            app.MapGet("/sw.js", (HttpContext ctx) =>
+            {
+                ctx.Response.Headers["Service-Worker-Allowed"] = "/";
+                ctx.Response.Headers["Cache-Control"] = "no-cache";
+                return Results.Content(Localize(Asset("sw.js")), "text/javascript; charset=utf-8");
+            });
+            app.MapGet("/icon/{size:int}.png", (int size) =>
+            {
+                size = size is 180 or 192 or 512 ? size : 192;
+                return Results.Bytes(PngIcon.AppIcon(size), "image/png");
+            });
 
             // YAML editor for the Config tab, bundled from webui/ (npm run build), served locally so no internet is needed.
             app.MapGet("/js/yaml-editor.js", () =>

@@ -467,6 +467,7 @@ namespace Lookout
                     if (!st.matrix.TryGetValue(cam, out var row)) st.matrix[cam] = row = new Dictionary<string, int>();
                     row[lab] = row.GetValueOrDefault(lab) + 1;
                     st.hours[local.Hour]++;
+                    st.heatmap[((int)local.DayOfWeek + 6) % 7][local.Hour]++;
                     string day = local.ToString("yyyy-MM-dd");
                     days[day] = days.GetValueOrDefault(day) + 1;
                 }
@@ -525,6 +526,75 @@ namespace Lookout
             st.days = days.Select(kv => new DayCount { day = kv.Key, count = kv.Value }).ToList();
             st.peakHour = st.total == 0 ? -1 : Array.IndexOf(st.hours, st.hours.Max());
             return st;
+        }
+
+        // Events matching a free-text query (id, camera, object, zone). AI / face search is added in the local DB layer.
+        public static List<EventRow> Search(string q, string camera, string label, double? from, double? to, int limit, out int total)
+        {
+            limit = Math.Clamp(limit, 1, 500);
+            string sql = " FROM event WHERE " + NotFalsePositive;
+            if (camera != null) sql += " AND camera = $camera";
+            if (label != null) sql += " AND label = $label";
+            if (from != null) sql += " AND start_time >= $from";
+            if (to != null) sql += " AND start_time <= $to";
+            if (!string.IsNullOrWhiteSpace(q))
+                sql += " AND (id LIKE $q OR camera LIKE $q OR label LIKE $q OR IFNULL(sub_label,'') LIKE $q OR IFNULL(zones,'') LIKE $q)";
+
+            using var db = Open();
+            using (var count = new SqliteCommand("SELECT COUNT(*) " + sql, db))
+            {
+                BindSearch(count, q, camera, label, from, to);
+                total = Convert.ToInt32(count.ExecuteScalar());
+            }
+            using var cmd = new SqliteCommand(
+                "SELECT id, camera, label, sub_label, " + ScoreExpr + " AS score, start_time, end_time, zones, has_snapshot, has_clip " +
+                sql + " ORDER BY start_time DESC LIMIT $limit", db);
+            BindSearch(cmd, q, camera, label, from, to);
+            cmd.Parameters.AddWithValue("$limit", limit);
+            return ReadEvents(cmd);
+        }
+
+        static void BindSearch(SqliteCommand cmd, string q, string camera, string label, double? from, double? to)
+        {
+            if (camera != null) cmd.Parameters.AddWithValue("$camera", camera);
+            if (label != null) cmd.Parameters.AddWithValue("$label", label);
+            if (from != null) cmd.Parameters.AddWithValue("$from", from.Value);
+            if (to != null) cmd.Parameters.AddWithValue("$to", to.Value);
+            if (!string.IsNullOrWhiteSpace(q)) cmd.Parameters.AddWithValue("$q", "%" + q.Trim() + "%");
+        }
+
+        static readonly string[] Weekdays = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+        public static string ToCsv(StatsResult st, string kind)
+        {
+            var sb = new System.Text.StringBuilder();
+            kind = (kind ?? "matrix").ToLowerInvariant();
+            if (kind == "hours")
+            {
+                sb.AppendLine("hour,count");
+                for (int h = 0; h < 24; h++) sb.AppendLine(h + "," + st.hours[h]);
+            }
+            else if (kind == "heatmap")
+            {
+                sb.AppendLine("weekday,hour,count");
+                for (int d = 0; d < 7; d++)
+                    for (int h = 0; h < 24; h++)
+                        sb.AppendLine(Weekdays[d] + "," + h + "," + st.heatmap[d][h]);
+            }
+            else
+            {
+                sb.AppendLine("camera,label,count");
+                foreach (var c in st.cameras)
+                    foreach (var l in st.labels)
+                        sb.AppendLine(Csv(c) + "," + Csv(l) + "," + (st.matrix.GetValueOrDefault(c)?.GetValueOrDefault(l) ?? 0));
+            }
+            return sb.ToString();
+        }
+
+        static string Csv(string s)
+        {
+            s ??= "";
+            return s.IndexOfAny(new[] { ',', '"', '\n' }) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
         }
 
         static double Unix(DateTime utc) => (utc - DateTime.UnixEpoch).TotalSeconds;

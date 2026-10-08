@@ -27,7 +27,7 @@
 		<None Remove="webui\**" />
 		<EmbeddedResource Remove="webui\**" />
 		<!-- YAML editor bundle built from webui/, favicon -->
-		<None Update="web\*.js;web\*.svg;web\*.css;web\*.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<None Update="web\*.js;web\*.svg;web\*.css;web\*.html;web\*.webmanifest" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 		<!-- README is rendered on the web UI's About tab -->
 		<None Include="..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>

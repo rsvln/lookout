@@ -40,14 +40,41 @@ namespace Lookout
             }));
 
             // label: empty = all objects, "config" = what the bot is configured to send, otherwise a single label.
-            app.MapGet("/api/stat", (string period, string camera, string label) => Safe(() =>
+            // format=csv|json (json is the default); csv kind=matrix|hours|heatmap.
+            app.MapGet("/api/stat", (string period, string camera, string label, string format, string kind) => Safe(() =>
             {
                 bool configOnly = label == "config";
-                return Results.Ok(StatsService.GetStats(period,
-                                                        string.IsNullOrEmpty(camera) ? null : camera,
-                                                        string.IsNullOrEmpty(label) || configOnly ? null : label,
-                                                        configOnly));
+                var st = StatsService.GetStats(period,
+                                               string.IsNullOrEmpty(camera) ? null : camera,
+                                               string.IsNullOrEmpty(label) || configOnly ? null : label,
+                                               configOnly);
+                if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
+                    return Results.File(System.Text.Encoding.UTF8.GetBytes(StatsService.ToCsv(st, kind)),
+                                        "text/csv; charset=utf-8", "lookout-stats.csv");
+                return Results.Ok(st);
             }));
+
+            app.MapGet("/api/search", (string q, string camera, string label, string from, string to, int? limit) => Safe(() =>
+            {
+                var rows = StatsService.Search(q, EmptyToNull(camera), EmptyToNull(label), ParseWhen(from), ParseWhen(to),
+                                               Math.Clamp(limit ?? 100, 1, 500), out int total);
+                return Results.Ok(new { total, events = rows.Select(EventJson) });
+            }));
+        }
+
+        static string EmptyToNull(string s) => string.IsNullOrEmpty(s) ? null : s;
+
+        // datetime-local ("2026-10-08T14:30") is wall time in the Lookout locale (options.timeoffset).
+        static double? ParseWhen(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            if (double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double unix))
+                return unix;
+            string[] formats = { "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd" };
+            if (!DateTime.TryParseExact(s.Trim(), formats, System.Globalization.CultureInfo.InvariantCulture,
+                                        System.Globalization.DateTimeStyles.None, out var dt))
+                return null;
+            return (dt - DateTime.UnixEpoch).TotalSeconds - Program.settings.options.timeoffset * 60;
         }
     }
 }

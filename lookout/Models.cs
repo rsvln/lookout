@@ -76,6 +76,21 @@ namespace Lookout
         public string password { get; set; }
         // Address of the web UI as seen from the phone, e.g. https://lookout.example.com (for "Open in Lookout" buttons).
         public string publicurl { get; set; }
+        // How the UI asks for a login: "basic" (default; the browser's HTTP Basic prompt) or "form" (login page and a
+        // session cookie). Basic credentials keep working in "form" mode, for scripts and Prometheus.
+        public string auth { get; set; } = "basic";
+        // More accounts besides user/password (which is always an admin): role is "viewer" (default) or "admin".
+        public List<WebUser> users { get; set; } = new List<WebUser>();
+        // Signs sessions and clip links; without it the key comes from the passwords, so changing one signs everybody out.
+        public string secret { get; set; }
+        public int sessionhours { get; set; } = 168;
+    }
+
+    public class WebUser
+    {
+        public string user { get; set; }
+        public string password { get; set; }
+        public string role { get; set; } = "viewer";
     }
 
     // Quiet hours: between `from` and `to` (local time, HH:mm; the interval may cross midnight) notifications change:
@@ -415,6 +430,8 @@ namespace Lookout
         public int[] hours { get; set; } = new int[24];
         public List<DayCount> days { get; set; } = new List<DayCount>();
         public Dictionary<string, double> lastByCamera { get; set; } = new Dictionary<string, double>();
+        // Monday = 0 … Sunday = 6, each 24 hours of the local day.
+        public int[][] heatmap { get; set; } = Enumerable.Range(0, 7).Select(_ => new int[24]).ToArray();
     }
 
 

@@ -2,10 +2,8 @@ namespace Lookout
 {
     internal static partial class WebUi
     {
-        // Paths served without the web login: they carry no event data, and Docker's HEALTHCHECK has no credentials.
-        static readonly string[] openPaths = { "/health" };
-
-        // Operations: liveness for Docker / load balancers, metrics for Prometheus.
+        // Operations: liveness for Docker / load balancers (/health is open: it has no event data and the
+        // HEALTHCHECK has no credentials), metrics for Prometheus (behind the login, Basic works for scrapers).
         static void MapOpsApi(WebApplication app)
         {
             app.MapGet("/health", async () =>
