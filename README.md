@@ -11,7 +11,8 @@ Previously named **frte2tg**.
 - Waits until all recording segments are on disk, then sends **complete video clips** built with ffmpeg; large clips are split automatically
 - **Snapshots** as media groups; for objects still in view (e.g. a parked car in a review that has already ended) the current best frame comes from the Frigate API
 - **Animated GIF previews** (optional, per camera)
-- Telegram rate limit handling with automatic retry; local Bot API server supported for large files
+- Telegram rate limit handling with automatic retry; optional disk retry queue when Telegram / AI / CompreFace is down; local Bot API server supported for large files
+- Per-camera **cooldown** and **quiet hours**; optional buttons under a notification (clip, open in Lookout, mute)
 
 **Recognition and AI**
 - **AI snapshot descriptions** via Ollama (default), OpenAI-compatible APIs or Gemini, in the language you choose (optional, per camera)
@@ -21,6 +22,7 @@ Previously named **frte2tg**.
 - `/status` — current frame of every camera
 - `/last` — latest events of every camera or one camera, with buttons to switch camera and object
 - `/stat` — events by camera, object, hour and day for 24 h / today / 7 d / 30 d, with buttons to switch the period
+- `/clip`, `/mute`, `/unmute` — fetch a clip by event id, silence a camera for a while
 
 **Web UI** (port 8888)
 - Live log with filters, newest lines first
@@ -28,11 +30,13 @@ Previously named **frte2tg**.
 - **Statistics**: cameras × objects matrix, activity by hour and day; click any cell or bar to see the events behind it as a gallery
 - Every view has its own address, so it can be bookmarked or shared; browser Back / Forward work
 - YAML **config editor** with highlighting and validation, applied without restarting the container
-- Optional password
+- **Search**, stats CSV export, PWA install
+- Optional login (HTTP Basic or a sign-in form; admin / viewer roles)
 
 **Integration**
 - Re-publishes an event / review to MQTT with type `trueend` once its recording is complete, for automations (optional, per camera)
 - Extra notification channels besides Telegram: ntfy, Discord, Matrix, generic webhook (off until `notifiers:` is set)
+- **`/health`** (MQTT, Frigate, ffmpeg, database) and Prometheus **`/metrics`**
 - **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, `uk`, `es`; add more with a JSON file)
 - Runs as a Docker container (Docker Hub and GitHub Container Registry)
 
@@ -106,6 +110,8 @@ frigate:
         - label: dog
           percent: 70
       zones: []                # leave empty to ignore zones
+      cooldown: 0              # minutes of quiet after a notification (0 = off)
+      cooldownperobject: false # a person right after a car still gets through
 
 mqtt:
   host: 192.168.1.10
@@ -132,6 +138,13 @@ options:
   retry: 30                    # polling interval in seconds
   sendeverythingwhatyouhave: true  # send partial clips if timeout expires
   gifwidth: 640                # GIF preview width in pixels (height is proportional)
+  retrymax: 0                  # disk retry queue: how many repeats on outage (0 = off)
+  retrybackoff: 30             # first delay in seconds, doubled each time
+  buttons: false               # Clip / Open in Lookout / Mute 1 h under each notification
+  # quiet:                     # optional quiet hours (local time; may cross midnight)
+  #   from: "22:00"
+  #   to: "07:00"
+  #   mode: silent             # silent | snapshot | none
   correlate: 0                 # seconds; events of different cameras in this window share an incident (0 = off)
   locale:                      # languages: en, ru, uk, es (files in locales/); "locale: ru" sets one for everything
     web: en                    # web UI
@@ -181,10 +194,12 @@ fr:
   confidence: 0.8              # minimum similarity to consider a match (0.0 - 1.0)
   detprobthreshold: 0.8        # minimum probability that detected area is actually a face (0.0 - 1.0)
 
-# Optional: password for the web UI (HTTP Basic auth); without it the UI is open to anyone who can reach port 8888
+# Optional: password for the web UI; without it the UI is open to anyone who can reach port 8888
 web:
   user: admin
   password: change-me
+  auth: basic                  # basic (browser prompt) | form (login page)
+  publicurl:                   # public origin of the UI, for "Open in Lookout" buttons
 ```
 
 ### Camera options
@@ -203,6 +218,9 @@ web:
 | `severity` | list | `[detection, alert]` | Frigate review severity filter |
 | `objects` | list | `[]` | Filter by object label and minimum confidence `percent` (the event's best score; for reviews, the best score of its detections) |
 | `zones` | list | `[]` | Filter by Frigate zone names (empty = all zones) |
+| `cooldown` | int | `0` | Minutes of quiet after this camera has sent a notification (`0` = off) |
+| `cooldownperobject` | bool | `false` | Count the cooldown per object type |
+| `quiet` | object | — | Quiet hours for this camera (`from` / `to` as `HH:mm`, `mode`: `silent`, `snapshot` or `none`); otherwise `options.quiet` |
 
 ## GIF Previews
 
@@ -283,6 +301,9 @@ Commands are accepted only from chats listed in `telegram.chatids`. Data for `/l
 | `/last [N] [object]` | Last N events of every camera (default 1), e.g. `/last 3`, `/last 2 person` |
 | `/last <camera> [N] [object]` | Last N events of one camera (default 5), e.g. `/last frontdoor 10`, `/last frontdoor dog` |
 | `/stat [period] [camera or object]` | Event statistics by object, camera and hour of day, with buttons to switch the period; period is `24h` (default), `7d`, `30d` or `today` |
+| `/clip <id>` | Clip of an event (the id is in the notification) |
+| `/mute [camera] [30m / 2h / 1d]` | Turn notifications off (all cameras, 1 hour by default) |
+| `/unmute [camera]` | Turn notifications back on |
 | `/help` | Help |
 
 Objects can be given by their Frigate label (`person`) or by their name in any locale file (`человек`).
