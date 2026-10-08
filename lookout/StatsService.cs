@@ -25,8 +25,18 @@ namespace Lookout
 
         public static string SnapshotPath(string camera, string id)
         {
-            string path = Program.settings.frigate.clipspath + "/" + camera + "-" + id + ".jpg";
-            return System.IO.File.Exists(path) ? path : null;
+            foreach (var path in SnapshotCandidates(camera, id))
+                if (System.IO.File.Exists(path)) return path;
+            return null;
+        }
+
+        static IEnumerable<string> SnapshotCandidates(string camera, string id)
+        {
+            string clips = Program.settings.frigate.clipspath ?? "";
+            yield return clips + "/" + camera + "-" + id + ".jpg";
+            yield return clips + "/" + camera + "/" + id + ".jpg";
+            yield return clips + "/" + id + ".jpg";
+            yield return Path.Combine(Program.appLocation ?? "", "live", camera + "-" + id + ".jpg");
         }
 
         static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -40,9 +50,22 @@ namespace Lookout
             if (path != null)
                 return await System.IO.File.ReadAllBytesAsync(path);
             var bytes = await GetFrigateSnapshotAsync(ev.id);
-            if (bytes != null && ev.end_time != null)
+            if (bytes == null) return null;
+            if (ev.end_time != null)
                 WarnClipsPathOnce();
+            TryCacheLiveSnapshot(ev.camera, ev.id, bytes);
             return bytes;
+        }
+
+        static void TryCacheLiveSnapshot(string camera, string id, byte[] bytes)
+        {
+            try
+            {
+                string dir = Path.Combine(Program.appLocation ?? "", "live");
+                Directory.CreateDirectory(dir);
+                System.IO.File.WriteAllBytes(Path.Combine(dir, camera + "-" + id + ".jpg"), bytes);
+            }
+            catch { }
         }
 
         static int clipsPathWarned, recordingsPathWarned;
@@ -56,17 +79,21 @@ namespace Lookout
         }
 
         // Current best frame of an event from Frigate's HTTP API, or null if Frigate doesn't have one.
+        // Full snapshot first; thumbnail is what Frigate keeps for events that never got a saved snapshot.
         public static async Task<byte[]> GetFrigateSnapshotAsync(string eventId)
         {
-            try
+            var f = Program.settings.frigate;
+            string root = "http://" + f.host + ":" + f.port + "/api/events/" + Uri.EscapeDataString(eventId);
+            foreach (var suffix in new[] { "/snapshot.jpg", "/thumbnail.jpg" })
             {
-                var f = Program.settings.frigate;
-                return await http.GetByteArrayAsync("http://" + f.host + ":" + f.port + "/api/events/" + Uri.EscapeDataString(eventId) + "/snapshot.jpg");
+                try
+                {
+                    var bytes = await http.GetByteArrayAsync(root + suffix);
+                    if (bytes != null && bytes.Length > 0) return bytes;
+                }
+                catch { }
             }
-            catch
-            {
-                return null;
-            }
+            return null;
         }
 
         static readonly TimeSpan LiveClipTtl = TimeSpan.FromSeconds(30);

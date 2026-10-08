@@ -150,6 +150,24 @@ namespace Lookout.Tests
         }
 
         [Fact]
+        public void SnapshotPath_FindsALiveCopy()
+        {
+            string dir = Path.Combine(Program.appLocation, "live");
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "front-live1.jpg");
+            File.WriteAllBytes(file, new byte[] { 0xff, 0xd8 });
+            try
+            {
+                Assert.Equal(file, StatsService.SnapshotPath("front", "live1"));
+                Assert.Null(StatsService.SnapshotPath("front", "missing"));
+            }
+            finally
+            {
+                try { File.Delete(file); } catch { }
+            }
+        }
+
+        [Fact]
         public void GetMeta_ListsCamerasAndLabels()
         {
             TestEnv.AddEvent(db, "a", "front", "person", 0.9, TestEnv.Now(-100));

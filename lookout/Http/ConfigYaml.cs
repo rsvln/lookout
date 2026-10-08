@@ -64,6 +64,8 @@ namespace Lookout
 
         // Replace the scalar (or sequence, for a list of scalars) at `path`; if the last key is missing, it is added
         // under its parent. Path: "mqtt.password", "frigate.cameras[camera=front].cooldown", "telegram.chatids".
+        public static readonly Regex CameraNameOk = new(@"^[A-Za-z0-9][A-Za-z0-9_.-]*$", RegexOptions.CultureInvariant);
+
         public static string Set(string yaml, string path, string value)
         {
             if (yaml == null) yaml = "";
@@ -74,7 +76,13 @@ namespace Lookout
                 var root = Root(yaml);
                 if (root == null) return yaml;
                 if (TryReplace(yaml, root, parts, 0, value, out string next)) return next;
-                return TryInsert(yaml, root, parts, 0, value) ?? yaml;
+                if (TryEnsureSelector(yaml, root, parts, out string ensured))
+                {
+                    yaml = ensured;
+                    root = Root(yaml);
+                    if (root != null && TryReplace(yaml, root, parts, 0, value, out next)) return next;
+                }
+                return root == null ? yaml : TryInsert(yaml, root, parts, 0, value) ?? yaml;
             }
             catch (YamlDotNet.Core.YamlException) { return yaml; }
         }
@@ -89,6 +97,39 @@ namespace Lookout
                 yaml = Set(yaml, kv.Key, kv.Value);
             }
             return yaml;
+        }
+
+        // Drops a sequence item, e.g. "frigate.cameras[camera=yard]". The last remaining item becomes [].
+        public static string Remove(string yaml, string path)
+        {
+            if (string.IsNullOrEmpty(yaml) || string.IsNullOrEmpty(path)) return yaml;
+            var parts = ParsePath(path);
+            if (parts.Count == 0 || parts[parts.Count - 1].selector == null) return yaml;
+            try
+            {
+                var root = Root(yaml);
+                if (root == null) return yaml;
+                var last = parts[parts.Count - 1];
+                var seqParts = parts.Select((p, i) => i == parts.Count - 1 ? (p.key, (string)null) : p).ToList();
+                if (Navigate(root, seqParts, 0, out _, out _) is not YamlSequenceNode seq) return yaml;
+                var item = Pick(seq, last.selector);
+                if (item == null) return yaml;
+                if (seq.Children.Count == 1)
+                {
+                    int from = (int)item.Start.Index;
+                    while (from > 0 && yaml[from - 1] is ' ' or '\t' or '\n' or '\r' or '-') from--;
+                    if (from > 0 && yaml[from - 1] == ':')
+                    {
+                        int to = NodeEnd(item);
+                        if (!SpanOf(seq, yaml, out _, out int seqEnd)) seqEnd = to;
+                        to = Math.Max(to, seqEnd);
+                        return yaml.Substring(0, from) + " []" + yaml.Substring(to);
+                    }
+                }
+                if (!SpanOfListItem(yaml, item, out int start, out int end)) return yaml;
+                return yaml.Substring(0, start) + yaml.Substring(end);
+            }
+            catch (YamlDotNet.Core.YamlException) { return yaml; }
         }
 
         public static string FormatScalar(string v)
@@ -159,16 +200,43 @@ namespace Lookout
             return parts;
         }
 
+        static int NodeEnd(YamlNode node)
+        {
+            int end = (int)node.End.Index;
+            if (node is YamlMappingNode map && map.Children.Count > 0)
+                end = Math.Max(end, map.Children.Max(kv => Math.Max(NodeEnd(kv.Key), NodeEnd(kv.Value))));
+            if (node is YamlSequenceNode seq && seq.Children.Count > 0)
+                end = Math.Max(end, seq.Children.Max(NodeEnd));
+            return end;
+        }
+
         static bool SpanOf(YamlNode node, string yaml, out int start, out int end)
         {
             start = (int)node.Start.Index;
-            end = (int)node.End.Index;
+            end = NodeEnd(node);
             if (node is YamlSequenceNode seq && seq.Children.Count > 0)
             {
-                start = seq.Children.Min(c => (int)c.Start.Index);
-                end = Math.Max(end, seq.Children.Max(c => (int)c.End.Index));
-                while (start > 0 && yaml[start - 1] is ' ' or '\t') start--;
-                if (start > 0 && yaml[start - 1] == '-') start--;
+                int nodeStart = (int)seq.Start.Index;
+                if (nodeStart >= 0 && nodeStart < yaml.Length && yaml[nodeStart] == '[')
+                {
+                    start = nodeStart;
+                    int depth = 0;
+                    for (int i = start; i < yaml.Length; i++)
+                    {
+                        if (yaml[i] == '[') depth++;
+                        else if (yaml[i] == ']')
+                        {
+                            depth--;
+                            if (depth == 0) { end = i + 1; break; }
+                        }
+                    }
+                }
+                else
+                {
+                    start = seq.Children.Min(c => (int)c.Start.Index);
+                    while (start > 0 && yaml[start - 1] is ' ' or '\t') start--;
+                    if (start > 0 && yaml[start - 1] == '-') start--;
+                }
             }
             return end > start && start >= 0 && end <= yaml.Length;
         }
@@ -198,8 +266,7 @@ namespace Lookout
             if (map.Children.Count > 0)
             {
                 var last = map.Children.Last();
-                var lastNode = last.Value.End.Index >= last.Key.End.Index ? last.Value : last.Key;
-                insertAt = (int)lastNode.End.Index;
+                insertAt = Math.Max((int)last.Key.End.Index, NodeEnd(last.Value));
                 indent = (int)last.Key.Start.Column - 1;
             }
             else
@@ -252,6 +319,110 @@ namespace Lookout
             return null;
         }
 
+        static YamlNode Child(YamlMappingNode map, string key)
+        {
+            foreach (var kv in map.Children)
+                if (kv.Key is YamlScalarNode ks && ks.Value == key) return kv.Value;
+            return null;
+        }
+
+        static bool TryEnsureSelector(string yaml, YamlNode root, List<(string key, string selector)> parts, out string next)
+        {
+            next = yaml;
+            YamlNode node = root;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var (key, sel) = parts[i];
+                if (node is not YamlMappingNode map) return false;
+                var child = Child(map, key);
+                if (sel == null)
+                {
+                    if (child == null) return false;
+                    node = child;
+                    continue;
+                }
+                int eq = sel.IndexOf('=');
+                if (eq <= 0) return false;
+                string field = sel.Substring(0, eq), want = sel.Substring(eq + 1);
+                if (child == null)
+                {
+                    next = InsertSequenceWithItem(yaml, map, key, field, want);
+                    return next != yaml;
+                }
+                if (child is not YamlSequenceNode seq) return false;
+                if (Pick(seq, sel) != null) { node = Pick(seq, sel); continue; }
+                next = AppendSequenceItem(yaml, seq, field, want);
+                return next != yaml;
+            }
+            return false;
+        }
+
+        static string InsertSequenceWithItem(string yaml, YamlMappingNode map, string key, string field, string want)
+        {
+            string nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+            int insertAt, indent;
+            if (map.Children.Count > 0)
+            {
+                var last = map.Children.Last();
+                insertAt = Math.Max((int)last.Key.End.Index, NodeEnd(last.Value));
+                indent = (int)last.Key.Start.Column - 1;
+            }
+            else
+            {
+                insertAt = (int)map.End.Index;
+                indent = Math.Max(0, (int)map.Start.Column + 1);
+            }
+            if (insertAt < 0 || insertAt > yaml.Length) return yaml;
+            string pad = new string(' ', Math.Max(0, indent));
+            string itemPad = new string(' ', Math.Max(0, indent + 2));
+            string block = nl + pad + key + ":" + nl + itemPad + "- " + field + ": " + FormatScalar(want);
+            return yaml.Substring(0, insertAt) + block + yaml.Substring(insertAt);
+        }
+
+        static string AppendSequenceItem(string yaml, YamlSequenceNode seq, string field, string want)
+        {
+            string nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+            string line = "- " + field + ": " + FormatScalar(want);
+            if (seq.Children.Count == 0)
+            {
+                if (!SpanOf(seq, yaml, out int start, out int end) || end < start) return yaml;
+                int i = start;
+                while (i > 0 && yaml[i - 1] != '\n' && yaml[i - 1] != '\r') i--;
+                int lineIndent = 0;
+                while (i + lineIndent < yaml.Length && yaml[i + lineIndent] is ' ' or '\t') lineIndent++;
+                return yaml.Substring(0, start) + nl + new string(' ', lineIndent + 2) + line + yaml.Substring(end);
+            }
+            var last = seq.Children.Last();
+            int insertAt = NodeEnd(last);
+            if (insertAt < 0 || insertAt > yaml.Length) return yaml;
+            return yaml.Substring(0, insertAt) + nl + new string(' ', ListItemIndent(yaml, last)) + line + yaml.Substring(insertAt);
+        }
+
+        static int ListItemIndent(string yaml, YamlNode item)
+        {
+            int i = (int)item.Start.Index;
+            while (i > 0 && yaml[i - 1] is ' ' or '\t') i--;
+            if (i > 0 && yaml[i - 1] == '-') i--;
+            int line = i;
+            while (line > 0 && yaml[line - 1] != '\n' && yaml[line - 1] != '\r') line--;
+            return Math.Max(0, i - line);
+        }
+
+        static bool SpanOfListItem(string yaml, YamlNode item, out int start, out int end)
+        {
+            start = (int)item.Start.Index;
+            end = NodeEnd(item);
+            while (start > 0 && yaml[start - 1] is ' ' or '\t') start--;
+            if (start > 0 && yaml[start - 1] == '-') start--;
+            while (start > 0 && yaml[start - 1] is ' ' or '\t') start--;
+            int lineStart = start;
+            while (lineStart > 0 && yaml[lineStart - 1] != '\n' && yaml[lineStart - 1] != '\r') lineStart--;
+            start = lineStart;
+            if (end < yaml.Length && yaml[end] == '\r') end++;
+            if (end < yaml.Length && yaml[end] == '\n') end++;
+            return end > start && start >= 0 && end <= yaml.Length;
+        }
+
         static string FormatSequence(string csv)
         {
             var items = (csv ?? "").Split(',').Select(s => s.Trim()).Where(s => s != "");
@@ -300,20 +471,27 @@ namespace Lookout
                     F("fr.confidence", "text", fr == null ? "" : fr.confidence.ToString(CultureInfo.InvariantCulture)),
                     F("fr.detprobthreshold", "text", fr == null ? "" : fr.detprobthreshold.ToString(CultureInfo.InvariantCulture))),
             };
-            var cameras = (f?.cameras ?? new List<Camera>()).Select(c => new CameraGroup(c.camera, new List<Field>
+            var cameras = (f?.cameras ?? new List<Camera>()).Select(c => new CameraGroup(c.camera, CameraFields(c.camera, c))).ToList();
+            return new { groups, cameras, cameraTemplate = CameraFields("{camera}") };
+        }
+
+        public static List<Field> CameraFields(string name, Camera c = null)
+        {
+            c ??= new Camera { camera = name };
+            string p = $"frigate.cameras[camera={name}]";
+            return new List<Field>
             {
-                F($"frigate.cameras[camera={c.camera}].snapshot", "checkbox", b(c.snapshot)),
-                F($"frigate.cameras[camera={c.camera}].clip", "checkbox", b(c.clip)),
-                F($"frigate.cameras[camera={c.camera}].gif", "checkbox", b(c.gif)),
-                F($"frigate.cameras[camera={c.camera}].ai", "checkbox", b(c.ai)),
-                F($"frigate.cameras[camera={c.camera}].fr", "checkbox", b(c.fr)),
-                F($"frigate.cameras[camera={c.camera}].trueend", "checkbox", b(c.trueend)),
-                F($"frigate.cameras[camera={c.camera}].topic", "select", c.topic ?? "reviews", "reviews", "events"),
-                F($"frigate.cameras[camera={c.camera}].snapshottrigger", "select", c.snapshottrigger ?? "end", "end", "new"),
-                F($"frigate.cameras[camera={c.camera}].cooldown", "number", n(c.cooldown)),
-                F($"frigate.cameras[camera={c.camera}].cooldownperobject", "checkbox", b(c.cooldownperobject)),
-            })).ToList();
-            return new { groups, cameras };
+                F($"{p}.snapshot", "checkbox", b(c.snapshot)),
+                F($"{p}.clip", "checkbox", b(c.clip)),
+                F($"{p}.gif", "checkbox", b(c.gif)),
+                F($"{p}.ai", "checkbox", b(c.ai)),
+                F($"{p}.fr", "checkbox", b(c.fr)),
+                F($"{p}.trueend", "checkbox", b(c.trueend)),
+                F($"{p}.topic", "select", c.topic ?? "reviews", "reviews", "events"),
+                F($"{p}.snapshottrigger", "select", c.snapshottrigger ?? "end", "end", "new"),
+                F($"{p}.cooldown", "number", n(c.cooldown)),
+                F($"{p}.cooldownperobject", "checkbox", b(c.cooldownperobject)),
+            };
         }
 
         static string Mask(string v) => string.IsNullOrEmpty(v) ? "" : ConfigYaml.Mask;

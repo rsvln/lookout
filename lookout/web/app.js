@@ -161,7 +161,7 @@ async function loadEvent(id) {
   const r = await res.json();
   document.title = 'Lookout · ' + r.camera + ' · ' + r.label + ' · ' + r.start_local;
   body.innerHTML = `<div class="event-view">
-      ${r.has_snapshot ? `<img src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" alt="">` : ''}
+      <img src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" onerror="this.remove()" alt="">
       ${eventCard(r)}
     </div>`;
 }
@@ -244,9 +244,7 @@ const ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 function eventCard(r) {
   return `
     <div class="card">
-      <div class="img">${r.has_snapshot
-        ? `<img loading="lazy" src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" onerror="this.replaceWith(t('web.no_snapshot'))" alt="">`
-        : esc(t('web.no_snapshot'))}</div>
+      <div class="img"><img loading="lazy" src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" onerror="this.replaceWith(document.createTextNode(t('web.no_snapshot')))" alt=""></div>
       <div class="meta">
         <div class="row1"><span class="lbl">${esc(labelName(r.label))}${r.sub_label ? ` <span class="sub">(${esc(r.sub_label)})</span>` : ''}</span>
           <span class="score">${Math.round(r.score * 100)}%</span></div>
@@ -604,7 +602,7 @@ let configMode = 'form';
 
 function setConfigMode(mode) {
   configMode = mode;
-  document.getElementById('config-form').style.display = mode === 'form' ? '' : 'none';
+  document.getElementById('config-form').style.display = mode === 'form' ? 'flex' : 'none';
   document.getElementById('config-yaml').style.display = mode === 'yaml' ? 'flex' : 'none';
   document.getElementById('config-mode-form').classList.toggle('primary', mode === 'form');
   document.getElementById('config-mode-yaml').classList.toggle('primary', mode === 'yaml');
@@ -632,13 +630,165 @@ function fieldInput(f) {
   return `<label>${esc(f.label)}<input type="${type}" data-path="${esc(f.path)}" value="${esc(f.value)}"${type === 'password' ? ' autocomplete="new-password"' : ''}></label>`;
 }
 
+let formTree = [];
+let cameraTemplate = [];
+let originalCameras = new Set();
+let removedCameras = [];
+
+const CAMERA_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+
+function settingsTree(data) {
+  return (data.groups || []).map(g => {
+    if (g.id === 'frigate')
+      return {
+        id: g.id, title: g.title, fields: g.fields,
+        children: (data.cameras || []).map(c => ({ id: 'cam:' + c.camera, title: c.camera, fields: c.fields }))
+      };
+    if (g.id === 'options') {
+      const quiet = (g.fields || []).filter(f => f.path.startsWith('options.quiet.'));
+      const rest = (g.fields || []).filter(f => !f.path.startsWith('options.quiet.'));
+      return {
+        id: g.id, title: g.title, fields: rest,
+        children: quiet.length ? [{ id: 'quiet', title: t('web.config.group.quiet'), fields: quiet }] : []
+      };
+    }
+    return { id: g.id, title: g.title, fields: g.fields || [] };
+  });
+}
+
+function treeHas(nodes, id) {
+  return nodes.some(n => n.id === id || (n.children && treeHas(n.children, id)));
+}
+
+function frigateNode() { return formTree.find(n => n.id === 'frigate'); }
+
+function renderTreeNav(nodes, selected, depth) {
+  return nodes.map(n => {
+    const kids = n.children && n.children.length;
+    const add = n.id === 'frigate'
+      ? `<button type="button" class="tree-item tree-add" style="--d:${depth + 1}" data-add-camera="1">${esc(t('web.config.add_camera'))}</button>`
+      : '';
+    return `<div class="tree-branch" style="--d:${depth}">
+      <button type="button" class="tree-item${selected === n.id ? ' on' : ''}" data-node="${esc(n.id)}">${esc(n.title)}</button>
+      ${kids ? renderTreeNav(n.children, selected, depth + 1) : ''}
+      ${add}
+    </div>`;
+  }).join('');
+}
+
+function renderTreePanes(nodes) {
+  let html = '';
+  (function walk(list) {
+    for (const n of list) {
+      const cam = n.id.startsWith('cam:') ? n.id.slice(4) : '';
+      const del = cam
+        ? `<button type="button" class="btn tree-del" data-del-camera="${esc(cam)}">${esc(t('web.config.remove_camera'))}</button>`
+        : '';
+      const grid = cam ? 'settings-grid cams' : 'settings-grid';
+      html += `<div class="tree-pane" data-pane="${esc(n.id)}"><div class="tree-pane-head"><h3>${esc(n.title)}</h3>${del}</div>`
+        + (n.fields && n.fields.length
+          ? `<div class="${grid}">${n.fields.map(fieldInput).join('')}</div>`
+          : '')
+        + `</div>`;
+      if (n.children) walk(n.children);
+    }
+  })(nodes);
+  return html;
+}
+
+function captureFields() {
+  document.querySelectorAll('#config-form [data-path]').forEach(el => {
+    const v = el.type === 'checkbox' ? (el.checked ? 'true' : 'false') : el.value;
+    (function walk(list) {
+      for (const n of list) {
+        const f = (n.fields || []).find(x => x.path === el.dataset.path);
+        if (f) f.value = v;
+        if (n.children) walk(n.children);
+      }
+    })(formTree);
+  });
+}
+
+function renderSettings(selected) {
+  const host = document.getElementById('config-form');
+  selected = selected || readPrefs().configNode || 'frigate';
+  if (!treeHas(formTree, selected)) selected = formTree[0] ? formTree[0].id : 'frigate';
+  host.innerHTML = `<nav class="tree-nav">${renderTreeNav(formTree, selected, 0)}</nav><div class="tree-main">${renderTreePanes(formTree)}</div>`;
+  host.querySelectorAll('.tree-item[data-node]').forEach(btn => btn.onclick = () => showConfigNode(btn.dataset.node));
+  host.querySelector('[data-add-camera]')?.addEventListener('click', startAddCamera);
+  host.querySelectorAll('[data-del-camera]').forEach(btn => btn.onclick = () => removeCamera(btn.dataset.delCamera));
+  showConfigNode(selected);
+}
+
+function showConfigNode(id) {
+  const host = document.getElementById('config-form');
+  host.querySelectorAll('.tree-item[data-node]').forEach(el => el.classList.toggle('on', el.dataset.node === id));
+  host.querySelectorAll('.tree-pane').forEach(el => el.classList.toggle('on', el.dataset.pane === id));
+  writePrefs({ configNode: id });
+}
+
+function startAddCamera(ev) {
+  const btn = ev.currentTarget;
+  if (document.querySelector('.tree-add-input')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'tree-add-form';
+  wrap.style.setProperty('--d', getComputedStyle(btn).getPropertyValue('--d') || '1');
+  wrap.innerHTML = `<input type="text" class="tree-add-input" placeholder="${esc(t('web.config.camera_name'))}" maxlength="64" spellcheck="false">`;
+  btn.replaceWith(wrap);
+  const input = wrap.querySelector('input');
+  input.focus();
+  let done = false;
+  const finish = commit => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim();
+    captureFields();
+    renderSettings(readPrefs().configNode);
+    if (commit) commitAddCamera(name);
+  };
+  input.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+  input.onblur = () => finish(!!input.value.trim());
+}
+
+function commitAddCamera(name) {
+  if (!name) return;
+  if (!CAMERA_NAME_RE.test(name)) { showToast(t('web.config.camera_invalid'), 'err'); return; }
+  const fr = frigateNode();
+  if (!fr) return;
+  fr.children = fr.children || [];
+  if (fr.children.some(c => c.id === 'cam:' + name)) { showToast(t('web.config.camera_exists', name), 'err'); return; }
+  removedCameras = removedCameras.filter(x => x !== name);
+  fr.children.push({
+    id: 'cam:' + name,
+    title: name,
+    fields: (cameraTemplate || []).map(f => Object.assign({}, f, { path: String(f.path).split('{camera}').join(name) }))
+  });
+  renderSettings('cam:' + name);
+}
+
+function removeCamera(name) {
+  if (!name || !confirm(t('web.config.remove_camera_confirm', name))) return;
+  const fr = frigateNode();
+  if (!fr?.children) return;
+  captureFields();
+  fr.children = fr.children.filter(c => c.id !== 'cam:' + name);
+  if (originalCameras.has(name) && !removedCameras.includes(name)) removedCameras.push(name);
+  renderSettings('frigate');
+}
+
 async function loadConfigForm() {
   const host = document.getElementById('config-form');
   const res = await fetch('/api/settings');
   if (!res.ok) { host.innerHTML = `<div class="empty">${esc(t('web.config.invalid', res.status))}</div>`; return; }
   const data = await res.json();
-  host.innerHTML = (data.groups || []).map(g => `<section class="settings-group"><h3>${esc(g.title)}</h3><div class="settings-grid">${g.fields.map(fieldInput).join('')}</div></section>`).join('')
-    + (data.cameras || []).map(c => `<section class="settings-group"><h3>📷 ${esc(c.camera)}</h3><div class="settings-grid cams">${c.fields.map(fieldInput).join('')}</div></section>`).join('');
+  cameraTemplate = data.cameraTemplate || [];
+  originalCameras = new Set((data.cameras || []).map(c => c.camera));
+  removedCameras = [];
+  formTree = settingsTree(data);
+  renderSettings();
 }
 
 function collectFields() {
@@ -694,9 +844,14 @@ async function saveConfig(apply) {
   setBusy(apply ? t('web.config.applying') : t('web.config.saving'));
   try {
     const ok = configMode === 'form'
-      ? await configRequest('/api/settings', { fields: collectFields(), apply })
+      ? await configRequest('/api/settings', { fields: collectFields(), apply, removeCameras })
       : await configRequest('/api/config', { content: (await getConfigEditor()).getValue(), apply });
     if (!ok) return;
+    if (configMode === 'form') {
+      const fr = frigateNode();
+      originalCameras = new Set((fr?.children || []).map(c => c.title));
+      removedCameras = [];
+    }
     if (apply) { setBusy(t('web.config.waiting')); await waitForService(); }
     else showToast(t('web.config.saved'), 'ok');
   } finally {

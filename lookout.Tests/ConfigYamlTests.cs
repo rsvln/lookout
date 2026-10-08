@@ -83,5 +83,185 @@ namespace Lookout.Tests
             string next = ConfigYaml.Set(Sample, "telegram.chatids", "-1, -2");
             Assert.Contains("[-1, -2]", next);
         }
+
+        static readonly string Cameras = """
+            frigate:
+              host: 10.0.0.1
+              cameras:
+                - camera: frontdoor
+                  clip: true
+                - camera: yard
+                  snapshot: true
+            mqtt:
+              host: 10.0.0.2
+            """.Replace("\r\n", "\n");
+
+        [Fact]
+        public void Set_AddsACameraAndItsFields()
+        {
+            string next = ConfigYaml.Apply(Cameras, new Dictionary<string, string>
+            {
+                ["frigate.cameras[camera=garage].snapshot"] = "true",
+                ["frigate.cameras[camera=garage].clip"] = "false",
+            });
+            Assert.Contains("camera: garage", next);
+            Assert.Contains("snapshot: true", next);
+            Assert.Contains("clip: false", next);
+            Assert.Contains("camera: frontdoor", next);
+            Assert.Contains("host: 10.0.0.2", next);
+        }
+
+        [Fact]
+        public void Set_CreatesCamerasKeyWhenMissing()
+        {
+            string yaml = "frigate:\n  host: 10.0.0.1\nmqtt:\n  host: 10.0.0.2\n";
+            string next = ConfigYaml.Set(yaml, "frigate.cameras[camera=gate].snapshot", "true");
+            Assert.Contains("cameras:", next);
+            Assert.Contains("camera: gate", next);
+            Assert.Contains("snapshot: true", next);
+            Assert.Contains("host: 10.0.0.1", next);
+        }
+
+        [Fact]
+        public void Remove_DropsACamera()
+        {
+            string next = ConfigYaml.Remove(Cameras, "frigate.cameras[camera=frontdoor]");
+            Assert.DoesNotContain("frontdoor", next);
+            Assert.Contains("camera: yard", next);
+            Assert.Contains("host: 10.0.0.2", next);
+        }
+
+        [Fact]
+        public void Remove_LastCameraBecomesEmptyList()
+        {
+            string yaml = """
+                frigate:
+                  cameras:
+                    - camera: only
+                      clip: true
+                mqtt:
+                  host: 10.0.0.2
+                """.Replace("\r\n", "\n");
+            string next = ConfigYaml.Remove(yaml, "frigate.cameras[camera=only]");
+            Assert.DoesNotContain("only", next);
+            Assert.Contains("cameras: []", next);
+            Assert.Contains("host: 10.0.0.2", next);
+        }
+
+        [Fact]
+        public void Remove_MissingCameraIsUnchanged()
+        {
+            Assert.Equal(Cameras, ConfigYaml.Remove(Cameras, "frigate.cameras[camera=nope]"));
+        }
+
+        [Fact]
+        public void Set_DoesNotNestAFlowSequence()
+        {
+            string yaml = "telegram:\n  chatids:\n    [-1001]\n";
+            string next = ConfigYaml.Set(yaml, "telegram.chatids", "-1001, -1002");
+            Assert.DoesNotContain("[[", next);
+            Assert.DoesNotContain("]]", next);
+            Assert.Contains("[-1001, -1002]", next);
+            next = ConfigYaml.Set(next, "telegram.chatids", "-1001");
+            Assert.DoesNotContain("]]", next);
+            Assert.Contains("[-1001]", next);
+        }
+
+        [Fact]
+        public void Remove_MiddleCameraWithNestedKeys()
+        {
+            string yaml = """
+                frigate:
+                  cameras:
+                    - camera: dachacam01
+                      clip: true
+                      snapshot: true
+                      cooldownperobject: false
+                    - camera: home01
+                      snapshot: true
+                      clip: false
+                      cooldownperobject: false
+                    - camera: garage
+                      snapshot: true
+                      clip: false
+                      cooldownperobject: false
+                  recordingsoriginalpath: ""
+                mqtt:
+                  host: 10.0.0.2
+                """.Replace("\r\n", "\n");
+            string next = ConfigYaml.Remove(yaml, "frigate.cameras[camera=home01]");
+            try
+            {
+                var s = new YamlDotNet.Serialization.DeserializerBuilder()
+                    .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
+                    .Build()
+                    .Deserialize<SettingsFile>(next);
+                Assert.Equal(new[] { "dachacam01", "garage" }, s.frigate.cameras.Select(c => c.camera).ToArray());
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail(ex.Message + "\n" + next);
+            }
+            Assert.DoesNotContain("home01", next);
+            Assert.Contains("recordingsoriginalpath", next);
+        }
+
+        [Fact]
+        public void Apply_FormSave_KeepsYamlValid()
+        {
+            string yaml = """
+                frigate:
+                  host: 127.0.0.1
+                  port: 5000
+                  clipspath: C:/tmp/clips
+                  dbpath: C:/tmp/frigate.db
+                  recordingspath: C:/tmp/rec
+                  cameras:
+                    - camera: dachacam01
+                      clip: true
+                      snapshot: true
+                    - camera: home01
+                mqtt:
+                  host: 127.0.0.1
+                  port: 1883
+                telegram:
+                  token: "123456:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
+                  chatids:
+                    - "-1001"
+                options:
+                  timeoffset: 180
+                logger:
+                  file: false
+                  console: true
+                """.Replace("\r\n", "\n");
+            var fields = new Dictionary<string, string>
+            {
+                ["frigate.recordingsoriginalpath"] = "",
+                ["frigate.cameras[camera=dachacam01].gif"] = "false",
+                ["frigate.cameras[camera=dachacam01].topic"] = "reviews",
+                ["frigate.cameras[camera=home01].snapshot"] = "true",
+                ["frigate.cameras[camera=home01].clip"] = "false",
+                ["frigate.cameras[camera=garage].snapshot"] = "true",
+                ["frigate.cameras[camera=garage].clip"] = "false",
+                ["telegram.chatids"] = "-1001",
+            };
+            string last = yaml;
+            foreach (var kv in fields)
+            {
+                last = ConfigYaml.Set(last, kv.Key, kv.Value);
+                try
+                {
+                    new YamlDotNet.Serialization.DeserializerBuilder()
+                        .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
+                        .Build()
+                        .Deserialize<SettingsFile>(last);
+                }
+                catch (Exception ex)
+                {
+                    Assert.Fail("After " + kv.Key + ": " + ex.Message + "\n" + last);
+                }
+            }
+            Assert.Contains("camera: garage", last);
+        }
     }
 }
