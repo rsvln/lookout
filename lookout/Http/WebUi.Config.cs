@@ -31,6 +31,9 @@ namespace Lookout
                 if (data.removeCameras != null)
                     foreach (var name in data.removeCameras.Where(n => n != null && ConfigYaml.CameraNameOk.IsMatch(n)))
                         yaml = ConfigYaml.Remove(yaml, "frigate.cameras[camera=" + name + "]");
+                if (data.removeNotifiers != null)
+                    foreach (var i in data.removeNotifiers.Where(x => x >= 0 && x < 64).Distinct().OrderByDescending(x => x))
+                        yaml = ConfigYaml.Remove(yaml, "notifiers[" + i + "]");
                 yaml = ConfigYaml.Apply(yaml, data.fields);
                 return await SaveYaml(configPath, yaml, data.apply);
             });
@@ -50,7 +53,7 @@ namespace Lookout
             app.MapPost("/api/apply", () => ApplyAsync(configPath));
         }
 
-        record SettingsPayload(Dictionary<string, string> fields, bool apply, string[] removeCameras = null);
+        record SettingsPayload(Dictionary<string, string> fields, bool apply, string[] removeCameras = null, int[] removeNotifiers = null);
 
         static async Task<IResult> SaveYaml(string configPath, string content, bool apply)
         {

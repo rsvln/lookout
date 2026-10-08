@@ -73,16 +73,16 @@ namespace Lookout
             if (parts.Count == 0) return yaml;
             try
             {
-                var root = Root(yaml);
-                if (root == null) return yaml;
-                if (TryReplace(yaml, root, parts, 0, value, out string next)) return next;
-                if (TryEnsureSelector(yaml, root, parts, out string ensured))
+                for (int attempt = 0; attempt < 32; attempt++)
                 {
+                    var root = Root(yaml);
+                    if (root == null) return yaml;
+                    if (TryReplace(yaml, root, parts, 0, value, out string next)) return next;
+                    if (!TryEnsureSelector(yaml, root, parts, out string ensured) || ensured == yaml)
+                        return TryInsert(yaml, root, parts, 0, value) ?? yaml;
                     yaml = ensured;
-                    root = Root(yaml);
-                    if (root != null && TryReplace(yaml, root, parts, 0, value, out next)) return next;
                 }
-                return root == null ? yaml : TryInsert(yaml, root, parts, 0, value) ?? yaml;
+                return yaml;
             }
             catch (YamlDotNet.Core.YamlException) { return yaml; }
         }
@@ -275,7 +275,10 @@ namespace Lookout
                 indent = Math.Max(0, (int)map.Start.Column + 1);
             }
             if (insertAt < 0 || insertAt > yaml.Length) return null;
-            string line = nl + new string(' ', Math.Max(0, indent)) + key + ": " + FormatScalar(value);
+            string formatted = string.Equals(key, "chatids", StringComparison.OrdinalIgnoreCase)
+                ? FormatSequence(value)
+                : FormatScalar(value);
+            string line = nl + new string(' ', Math.Max(0, indent)) + key + ": " + formatted;
             return yaml.Substring(0, insertAt) + line + yaml.Substring(insertAt);
         }
 
@@ -340,6 +343,18 @@ namespace Lookout
                     if (child == null) return false;
                     node = child;
                     continue;
+                }
+                if (int.TryParse(sel, NumberStyles.Integer, CultureInfo.InvariantCulture, out int idx) && idx >= 0 && idx < 64)
+                {
+                    if (child == null)
+                    {
+                        next = InsertSequenceWithItem(yaml, map, key, "type", "");
+                        return next != yaml;
+                    }
+                    if (child is not YamlSequenceNode intSeq) return false;
+                    if (idx < intSeq.Children.Count) { node = intSeq.Children[idx]; continue; }
+                    next = AppendSequenceItem(yaml, intSeq, "type", "");
+                    return next != yaml;
                 }
                 int eq = sel.IndexOf('=');
                 if (eq <= 0) return false;
@@ -452,6 +467,7 @@ namespace Lookout
                     F("telegram.chatids", "text", tg?.chatids == null ? "" : string.Join(", ", tg.chatids)),
                     F("telegram.clipsizecheck", "number", n(tg?.clipsizecheck)), F("telegram.clipsizesplit", "number", n(tg?.clipsizesplit)),
                     F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit))),
+                G("notifiers"),
                 G("web", F("web.user", "text", w?.user), F("web.password", "password", Mask(w?.password)),
                     F("web.publicurl", "text", w?.publicurl), F("web.auth", "select", w?.auth ?? "basic", "basic", "form"),
                     F("web.sessionhours", "number", n(w?.sessionhours ?? 168)), F("web.secret", "password", Mask(w?.secret))),
@@ -472,7 +488,46 @@ namespace Lookout
                     F("fr.detprobthreshold", "text", fr == null ? "" : fr.detprobthreshold.ToString(CultureInfo.InvariantCulture))),
             };
             var cameras = (f?.cameras ?? new List<Camera>()).Select(c => new CameraGroup(c.camera, CameraFields(c.camera, c))).ToList();
-            return new { groups, cameras, cameraTemplate = CameraFields("{camera}") };
+            var notifierList = s?.notifiers ?? new List<NotifierSettings>();
+            var notifiers = notifierList.Select((n, i) => new
+            {
+                index = i,
+                type = string.IsNullOrWhiteSpace(n.type) ? "ntfy" : n.type.Trim().ToLowerInvariant(),
+                fields = NotifierFields(i, n)
+            }).ToList();
+            var notifierTemplates = new[] { "ntfy", "discord", "matrix", "webhook", "telegram" }
+                .ToDictionary(t => t, t => NotifierFields(0, new NotifierSettings { type = t }));
+            return new { groups, cameras, cameraTemplate = CameraFields("{camera}"), notifiers, notifierTemplates };
+        }
+
+        public static List<Field> NotifierFields(int index, NotifierSettings s)
+        {
+            s ??= new NotifierSettings();
+            string kind = string.IsNullOrWhiteSpace(s.type) ? "ntfy" : s.type.Trim().ToLowerInvariant();
+            string p = $"notifiers[{index}]";
+            var list = new List<Field> { F($"{p}.type", "select", kind, "ntfy", "discord", "matrix", "webhook", "telegram") };
+            switch (kind)
+            {
+                case "discord":
+                case "webhook":
+                    list.Add(F($"{p}.url", "text", s.url));
+                    break;
+                case "matrix":
+                    list.Add(F($"{p}.homeserver", "text", s.homeserver));
+                    list.Add(F($"{p}.token", "password", Mask(s.token)));
+                    list.Add(F($"{p}.room", "text", s.room));
+                    break;
+                case "telegram":
+                    list.Add(F($"{p}.chatids", "text", s.chatids == null ? "" : string.Join(", ", s.chatids)));
+                    break;
+                default:
+                    list.Add(F($"{p}.url", "text", s.url));
+                    list.Add(F($"{p}.token", "password", Mask(s.token)));
+                    list.Add(F($"{p}.title", "text", s.title));
+                    list.Add(F($"{p}.attach", "checkbox", b(s.attach)));
+                    break;
+            }
+            return list;
         }
 
         public static List<Field> CameraFields(string name, Camera c = null)
@@ -500,6 +555,12 @@ namespace Lookout
         static string b(bool v) => v ? "true" : "false";
         static string L(string path)
         {
+            if (path != null && path.StartsWith("notifiers[", StringComparison.Ordinal))
+            {
+                int dot = path.LastIndexOf('.');
+                string nk = "web.field.notifier." + (dot < 0 ? path : path.Substring(dot + 1));
+                if (L10n.Web.Has(nk)) return L10n.Web.T(nk);
+            }
             string key = "web.field." + path.Replace("frigate.cameras[camera=", "camera.").Replace("]", "");
             int cut = key.IndexOf("camera.");
             if (cut >= 0) key = "web.field." + key.Substring(key.LastIndexOf('.') + 1);

@@ -623,19 +623,28 @@ function fieldInput(f) {
   if (f.type === 'checkbox')
     return `<label class="chk"><input type="checkbox" data-path="${esc(f.path)}"${f.value === 'true' ? ' checked' : ''}> ${esc(f.label)}</label>`;
   if (f.type === 'select')
-    return `<label>${esc(f.label)}<select data-path="${esc(f.path)}">${(f.options || []).map(o => `<option${o === f.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+    return `<label>${esc(f.label)}<select data-path="${esc(f.path)}">${(f.options || []).map(o => `<option value="${esc(o)}"${o === f.value ? ' selected' : ''}>${esc(optionLabel(f, o))}</option>`).join('')}</select></label>`;
   if (f.type === 'textarea')
     return `<label>${esc(f.label)}<textarea data-path="${esc(f.path)}" rows="3">${esc(f.value)}</textarea></label>`;
   const type = f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text';
   return `<label>${esc(f.label)}<input type="${type}" data-path="${esc(f.path)}" value="${esc(f.value)}"${type === 'password' ? ' autocomplete="new-password"' : ''}></label>`;
 }
 
+function optionLabel(f, o) {
+  if (f.path && /notifiers\[\d+\]\.type$/.test(f.path) && I18N['web.config.notifier.' + o])
+    return t('web.config.notifier.' + o);
+  return o;
+}
+
 let formTree = [];
 let cameraTemplate = [];
+let notifierTemplates = {};
 let originalCameras = new Set();
 let removedCameras = [];
+let removedNotifiers = [];
 
 const CAMERA_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+const NOTIFIER_TYPES = ['ntfy', 'discord', 'matrix', 'webhook', 'telegram'];
 
 function settingsTree(data) {
   return (data.groups || []).map(g => {
@@ -643,6 +652,17 @@ function settingsTree(data) {
       return {
         id: g.id, title: g.title, fields: g.fields,
         children: (data.cameras || []).map(c => ({ id: 'cam:' + c.camera, title: c.camera, fields: c.fields }))
+      };
+    if (g.id === 'notifiers')
+      return {
+        id: g.id, title: g.title, fields: [],
+        children: (data.notifiers || []).map(n => ({
+          id: 'n:' + n.index,
+          title: t('web.config.notifier.' + n.type),
+          ntype: n.type,
+          originalIndex: n.index,
+          fields: n.fields
+        }))
       };
     if (g.id === 'options') {
       const quiet = (g.fields || []).filter(f => f.path.startsWith('options.quiet.'));
@@ -661,12 +681,15 @@ function treeHas(nodes, id) {
 }
 
 function frigateNode() { return formTree.find(n => n.id === 'frigate'); }
+function notifiersNode() { return formTree.find(n => n.id === 'notifiers'); }
 
 function renderTreeNav(nodes, selected, depth) {
   return nodes.map(n => {
     const kids = n.children && n.children.length;
     const add = n.id === 'frigate'
       ? `<button type="button" class="tree-item tree-add" style="--d:${depth + 1}" data-add-camera="1">${esc(t('web.config.add_camera'))}</button>`
+      : n.id === 'notifiers'
+      ? `<button type="button" class="tree-item tree-add" style="--d:${depth + 1}" data-add-notifier="1">${esc(t('web.config.add_notifier'))}</button>`
       : '';
     return `<div class="tree-branch" style="--d:${depth}">
       <button type="button" class="tree-item${selected === n.id ? ' on' : ''}" data-node="${esc(n.id)}">${esc(n.title)}</button>
@@ -681,11 +704,17 @@ function renderTreePanes(nodes) {
   (function walk(list) {
     for (const n of list) {
       const cam = n.id.startsWith('cam:') ? n.id.slice(4) : '';
+      const ni = n.id.startsWith('n:') ? n.id.slice(2) : '';
       const del = cam
         ? `<button type="button" class="btn tree-del" data-del-camera="${esc(cam)}">${esc(t('web.config.remove_camera'))}</button>`
+        : ni !== ''
+        ? `<button type="button" class="btn tree-del" data-del-notifier="${esc(ni)}">${esc(t('web.config.remove_notifier'))}</button>`
+        : '';
+      const hint = n.id === 'notifiers'
+        ? `<p class="tree-hint">${esc(t('web.config.notifiers_hint'))}</p>`
         : '';
       const grid = cam ? 'settings-grid cams' : 'settings-grid';
-      html += `<div class="tree-pane" data-pane="${esc(n.id)}"><div class="tree-pane-head"><h3>${esc(n.title)}</h3>${del}</div>`
+      html += `<div class="tree-pane" data-pane="${esc(n.id)}"><div class="tree-pane-head"><h3>${esc(n.title)}</h3>${del}</div>${hint}`
         + (n.fields && n.fields.length
           ? `<div class="${grid}">${n.fields.map(fieldInput).join('')}</div>`
           : '')
@@ -716,7 +745,13 @@ function renderSettings(selected) {
   host.innerHTML = `<nav class="tree-nav">${renderTreeNav(formTree, selected, 0)}</nav><div class="tree-main">${renderTreePanes(formTree)}</div>`;
   host.querySelectorAll('.tree-item[data-node]').forEach(btn => btn.onclick = () => showConfigNode(btn.dataset.node));
   host.querySelector('[data-add-camera]')?.addEventListener('click', startAddCamera);
+  host.querySelector('[data-add-notifier]')?.addEventListener('click', startAddNotifier);
   host.querySelectorAll('[data-del-camera]').forEach(btn => btn.onclick = () => removeCamera(btn.dataset.delCamera));
+  host.querySelectorAll('[data-del-notifier]').forEach(btn => btn.onclick = () => removeNotifier(btn.dataset.delNotifier));
+  host.querySelectorAll('select[data-path]').forEach(sel => {
+    if (!/^notifiers\[\d+\]\.type$/.test(sel.dataset.path)) return;
+    sel.onchange = () => changeNotifierType(sel.dataset.path, sel.value);
+  });
   showConfigNode(selected);
 }
 
@@ -779,14 +814,106 @@ function removeCamera(name) {
   renderSettings('frigate');
 }
 
+function notifierFieldsFromTemplate(type, index) {
+  const tmpl = notifierTemplates[type] || notifierTemplates.ntfy || [];
+  return tmpl.map(f => Object.assign({}, f, {
+    path: String(f.path).replace(/notifiers\[\d+\]/, 'notifiers[' + index + ']'),
+    value: String(f.path).endsWith('.type') ? type : (f.value || '')
+  }));
+}
+
+function reindexNotifiers() {
+  const n = notifiersNode();
+  if (!n?.children) return;
+  n.children.forEach((c, i) => {
+    c.id = 'n:' + i;
+    c.fields = (c.fields || []).map(f => Object.assign({}, f, {
+      path: String(f.path).replace(/notifiers\[\d+\]/, 'notifiers[' + i + ']')
+    }));
+  });
+}
+
+function startAddNotifier(ev) {
+  const btn = ev.currentTarget;
+  if (document.querySelector('.tree-add-input')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'tree-add-form';
+  wrap.style.setProperty('--d', getComputedStyle(btn).getPropertyValue('--d') || '1');
+  wrap.innerHTML = `<select class="tree-add-input">${NOTIFIER_TYPES.map(x => `<option value="${x}">${esc(t('web.config.notifier.' + x))}</option>`).join('')}</select>`;
+  btn.replaceWith(wrap);
+  const sel = wrap.querySelector('select');
+  sel.focus();
+  let done = false;
+  const finish = commit => {
+    if (done) return;
+    done = true;
+    const type = sel.value;
+    captureFields();
+    renderSettings(readPrefs().configNode);
+    if (commit) commitAddNotifier(type);
+  };
+  sel.onchange = () => finish(true);
+  sel.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+  sel.onblur = () => setTimeout(() => finish(false), 150);
+}
+
+function commitAddNotifier(type) {
+  type = NOTIFIER_TYPES.includes(type) ? type : 'ntfy';
+  const n = notifiersNode();
+  if (!n) return;
+  n.children = n.children || [];
+  const i = n.children.length;
+  n.children.push({
+    id: 'n:' + i,
+    title: t('web.config.notifier.' + type),
+    ntype: type,
+    originalIndex: null,
+    fields: notifierFieldsFromTemplate(type, i)
+  });
+  renderSettings('n:' + i);
+}
+
+function removeNotifier(index) {
+  index = +index;
+  const n = notifiersNode();
+  if (!n?.children || index < 0 || index >= n.children.length) return;
+  const child = n.children[index];
+  if (!confirm(t('web.config.remove_notifier_confirm', child.title))) return;
+  captureFields();
+  if (child.originalIndex != null && !removedNotifiers.includes(child.originalIndex))
+    removedNotifiers.push(child.originalIndex);
+  n.children.splice(index, 1);
+  reindexNotifiers();
+  renderSettings('notifiers');
+}
+
+function changeNotifierType(path, type) {
+  const m = /^notifiers\[(\d+)\]\.type$/.exec(path);
+  if (!m) return;
+  const i = +m[1];
+  const child = notifiersNode()?.children?.[i];
+  if (!child) return;
+  type = NOTIFIER_TYPES.includes(type) ? type : 'ntfy';
+  captureFields();
+  child.ntype = type;
+  child.title = t('web.config.notifier.' + type);
+  child.fields = notifierFieldsFromTemplate(type, i);
+  renderSettings('n:' + i);
+}
+
 async function loadConfigForm() {
   const host = document.getElementById('config-form');
   const res = await fetch('/api/settings');
   if (!res.ok) { host.innerHTML = `<div class="empty">${esc(t('web.config.invalid', res.status))}</div>`; return; }
   const data = await res.json();
   cameraTemplate = data.cameraTemplate || [];
+  notifierTemplates = data.notifierTemplates || {};
   originalCameras = new Set((data.cameras || []).map(c => c.camera));
   removedCameras = [];
+  removedNotifiers = [];
   formTree = settingsTree(data);
   renderSettings();
 }
@@ -844,13 +971,16 @@ async function saveConfig(apply) {
   setBusy(apply ? t('web.config.applying') : t('web.config.saving'));
   try {
     const ok = configMode === 'form'
-      ? await configRequest('/api/settings', { fields: collectFields(), apply, removeCameras })
+      ? await configRequest('/api/settings', { fields: collectFields(), apply, removeCameras, removeNotifiers })
       : await configRequest('/api/config', { content: (await getConfigEditor()).getValue(), apply });
     if (!ok) return;
     if (configMode === 'form') {
       const fr = frigateNode();
       originalCameras = new Set((fr?.children || []).map(c => c.title));
       removedCameras = [];
+      const nn = notifiersNode();
+      (nn?.children || []).forEach((c, i) => { c.originalIndex = i; });
+      removedNotifiers = [];
     }
     if (apply) { setBusy(t('web.config.waiting')); await waitForService(); }
     else showToast(t('web.config.saved'), 'ok');

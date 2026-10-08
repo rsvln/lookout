@@ -263,5 +263,87 @@ namespace Lookout.Tests
             }
             Assert.Contains("camera: garage", last);
         }
+
+        [Fact]
+        public void Set_AddsNotifierWhenMissing()
+        {
+            string next = ConfigYaml.Apply(Sample, new Dictionary<string, string>
+            {
+                ["notifiers[0].type"] = "ntfy",
+                ["notifiers[0].url"] = "https://ntfy.sh/alerts",
+                ["notifiers[0].attach"] = "true",
+            });
+            Assert.Contains("notifiers:", next);
+            Assert.Contains("type: ntfy", next);
+            Assert.Contains("https://ntfy.sh/alerts", next);
+            Assert.Contains("host: 10.0.0.1", next);
+        }
+
+        [Fact]
+        public void Set_GrowsNotifierListByIndex()
+        {
+            string yaml = Sample + "\nnotifiers:\n  - type: ntfy\n    url: https://ntfy.sh/a\n";
+            string next = ConfigYaml.Apply(yaml, new Dictionary<string, string>
+            {
+                ["notifiers[1].type"] = "discord",
+                ["notifiers[1].url"] = "https://discord.example/hook",
+            });
+            Assert.Contains("type: ntfy", next);
+            Assert.Contains("type: discord", next);
+            Assert.Contains("https://discord.example/hook", next);
+        }
+
+        [Fact]
+        public void Set_InsertsTelegramNotifierChatidsAsSequence()
+        {
+            string next = ConfigYaml.Apply(Sample, new Dictionary<string, string>
+            {
+                ["notifiers[0].type"] = "telegram",
+                ["notifiers[0].chatids"] = "-1001, -1002",
+            });
+            Assert.Contains("type: telegram", next);
+            Assert.Contains("[-1001, -1002]", next);
+        }
+
+        [Fact]
+        public void Remove_DropsNotifierByIndex()
+        {
+            string yaml = Sample + "\nnotifiers:\n  - type: ntfy\n    url: https://ntfy.sh/a\n  - type: webhook\n    url: http://127.0.0.1/hook\n";
+            string next = ConfigYaml.Remove(yaml, "notifiers[0]");
+            Assert.DoesNotContain("ntfy", next);
+            Assert.Contains("type: webhook", next);
+            next = ConfigYaml.Remove(next, "notifiers[0]");
+            Assert.Contains("notifiers: []", next);
+        }
+
+        [Fact]
+        public void Snapshot_AlwaysHasNotifiersGroup()
+        {
+            Program.appLocation = AppContext.BaseDirectory;
+            L10n.Load("en", "en", "en");
+            string json = System.Text.Json.JsonSerializer.Serialize(SettingsForm.Snapshot(new SettingsFile()));
+            Assert.Contains("\"id\":\"notifiers\"", json);
+            Assert.Contains("\"title\":\"Notifiers\"", json);
+            Assert.Contains("\"notifiers\":[]", json);
+            Assert.Contains("notifierTemplates", json);
+        }
+
+        [Fact]
+        public void Snapshot_ExposesExistingNotifiers()
+        {
+            Program.appLocation = AppContext.BaseDirectory;
+            L10n.Load("en", "en", "en");
+            var s = new SettingsFile
+            {
+                notifiers = new List<NotifierSettings>
+                {
+                    new NotifierSettings { type = "discord", url = "https://discord.example/hook" }
+                }
+            };
+            string json = System.Text.Json.JsonSerializer.Serialize(SettingsForm.Snapshot(s));
+            Assert.Contains("notifiers[0].url", json);
+            Assert.Contains("https://discord.example/hook", json);
+            Assert.Contains("\"type\":\"discord\"", json);
+        }
     }
 }

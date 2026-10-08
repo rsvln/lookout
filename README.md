@@ -29,13 +29,13 @@ Previously named **frte2tg**.
 - **Last events** as snapshot cards with in-page **video playback and download** (clips built from recordings, also for events still in progress)
 - **Statistics**: cameras × objects matrix, activity by hour and day; click any cell or bar to see the events behind it as a gallery
 - Every view has its own address, so it can be bookmarked or shared; browser Back / Forward work
-- **Config** as a settings tree (including add/remove cameras) or YAML, applied without restarting the container
+- **Config** as a settings tree (cameras and extra notifier channels, even when they are not in the YAML yet) or YAML, applied without restarting the container
 - **Search**, stats CSV export, PWA install
 - Optional login (HTTP Basic or a sign-in form; admin / viewer roles)
 
 **Integration**
 - Re-publishes an event / review to MQTT with type `trueend` once its recording is complete, for automations (optional, per camera)
-- Extra notification channels besides Telegram: ntfy, Discord, Matrix, generic webhook (off until `notifiers:` is set)
+- Extra notification channels besides Telegram: ntfy, Discord, Matrix, generic webhook (Config tree always shows Notifiers; omit `notifiers:` and nothing extra is sent)
 - **`/health`** (MQTT, Frigate, ffmpeg, database) and Prometheus **`/metrics`**
 - **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, `zh`, `es`; add more with a JSON file)
 - Runs as a Docker container (Docker Hub and GitHub Container Registry)
@@ -251,7 +251,7 @@ Tested with `qwen2.5vl:7b` on a machine with RTX 3060 — ~2 seconds per image.
 
 ## Extra notifiers
 
-The `telegram:` block still sends albums the way it always did. An optional `notifiers:` list adds other channels; each gets the caption and the first snapshot once per event or review (not once per Telegram chat). Omit the section and nothing extra is sent.
+The `telegram:` block still sends albums the way it always did. Extra channels (ntfy, Discord, Matrix, webhook, extra Telegram chats) sit under **Notifiers** in the Config tree even when `notifiers:` is missing from the YAML — add a channel there to write it. Each extra channel gets the caption and the first snapshot once per event or review (not once per Telegram chat). Omit the section and nothing extra is sent.
 
 | `type` | Required | Notes |
 |--------|----------|--------|

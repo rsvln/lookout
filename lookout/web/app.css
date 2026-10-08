@@ -257,6 +257,7 @@
   .tree-pane-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .tree-pane-head h3 { font-size: 15px; font-weight: 500; margin: 0; }
   .tree-del { margin-left: auto; }
+  .tree-hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.4; }
   .tree-item.tree-add { color: var(--muted); }
   .tree-item.tree-add:hover { color: var(--accent); }
   .tree-add-form { padding: 4px 14px 4px calc(12px + var(--d, 1) * 16px); }
