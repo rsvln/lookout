@@ -61,6 +61,7 @@ namespace Lookout.Tests
             Assert.Equal(2147483648L, s.telegram.clipsizecheck);
             Assert.Equal(120, s.options.timeoffset);
             Assert.Equal(300, s.options.timeout);
+            Assert.Equal(0, s.options.correlate);
             Assert.True(s.logger.file);
             Assert.Null(s.ai);
             Assert.Null(s.web);

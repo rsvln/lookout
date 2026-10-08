@@ -28,6 +28,7 @@ namespace Lookout
         public static IMqttClient mqttClient;
         public static MqttClientOptions mqttOptions;
         public static string appLocation;
+        public static string configPath;
         public static AIQueueService aiQueue;
         public static FRQueueService frQueue;
         public static bool goAI = false;
@@ -56,6 +57,7 @@ namespace Lookout
             }
 
             Log("app", "", "", "Lookout v" + VersionInfo.Informational + " started");
+            configPath = fs;
             WebUi.Start(fs);
             StatsService.StartClipCacheCleaner();
             await Initialize();
@@ -71,6 +73,8 @@ namespace Lookout
             RegisterRetryHandlers();
             RetryQueue.Start();
             NotifierHub.Reload(settings.notifiers);
+            if (!string.IsNullOrEmpty(configPath))
+                LocalStore.Open(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(configPath)), "lookout.db"));
 
             if (goAI) { aiQueue.Stop(); goAI = false; }
             if (goFR) { frQueue.Stop(); goFR = false; }

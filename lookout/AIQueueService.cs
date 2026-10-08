@@ -97,6 +97,10 @@ namespace Lookout
 
                 var descriptions = new List<string>();
                 Exception failure = null;   // set only when the retry queue is on (CallAIApiAsync rethrows then)
+                string prompt = task.Prompt;
+                string related = LocalStore.IncidentContext(task.EventId);
+                if (!string.IsNullOrEmpty(related))
+                    prompt = related + " " + prompt;
                 int idx = 1;
                 foreach (var path in task.ImagePaths)
                 {
@@ -108,7 +112,7 @@ namespace Lookout
                     }
                     try
                     {
-                        var desc = await CallAIApiAsync(path, task.Prompt, task.EventId, task.Camera);
+                        var desc = await CallAIApiAsync(path, prompt, task.EventId, task.Camera);
                         if (!string.IsNullOrEmpty(desc))
                             descriptions.Add(task.ImagePaths.Count > 1 ? $"{idx}. {desc}" : desc);
                     }
@@ -129,9 +133,11 @@ namespace Lookout
                     return;
                 }
 
+                string joined = string.Join("\n\n", descriptions);
+                LocalStore.SetAi(task.EventId, joined);
                 try
                 {
-                    await UpdateTelegramMessageAsync(task, string.Join("\n\n", descriptions));
+                    await UpdateTelegramMessageAsync(task, joined);
                 }
                 catch (Exception ex) when (RetryQueue.Enabled)
                 {

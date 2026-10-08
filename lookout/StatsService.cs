@@ -528,7 +528,7 @@ namespace Lookout
             return st;
         }
 
-        // Events matching a free-text query (id, camera, object, zone). AI / face search is added in the local DB layer.
+        // Events matching a free-text query (id, camera, object, zone). AI / face text comes from lookout.db when it is open.
         public static List<EventRow> Search(string q, string camera, string label, double? from, double? to, int limit, out int total)
         {
             limit = Math.Clamp(limit, 1, 500);
@@ -551,7 +551,30 @@ namespace Lookout
                 sql + " ORDER BY start_time DESC LIMIT $limit", db);
             BindSearch(cmd, q, camera, label, from, to);
             cmd.Parameters.AddWithValue("$limit", limit);
-            return ReadEvents(cmd);
+            var rows = ReadEvents(cmd);
+            if (!LocalStore.IsOpen)
+                return rows;
+
+            var map = new Dictionary<string, EventRow>(StringComparer.Ordinal);
+            foreach (var r in rows) map[r.id] = r;
+            LocalStore.Fill(rows);
+            foreach (var extra in LocalStore.Search(q, camera, label, from, to, limit))
+            {
+                if (map.TryGetValue(extra.id, out var existing))
+                {
+                    existing.ai_text = extra.ai_text ?? existing.ai_text;
+                    existing.faces = extra.faces ?? existing.faces;
+                    existing.incident_id = extra.incident_id ?? existing.incident_id;
+                    if (string.IsNullOrEmpty(existing.sub_label) && !string.IsNullOrEmpty(extra.faces))
+                        existing.sub_label = extra.faces;
+                }
+                else if (!string.IsNullOrWhiteSpace(q))
+                    map[extra.id] = extra;
+            }
+            var merged = map.Values.OrderByDescending(r => r.start_time).Take(limit).ToList();
+            if (!string.IsNullOrWhiteSpace(q))
+                total = map.Count;
+            return merged;
         }
 
         static void BindSearch(SqliteCommand cmd, string q, string camera, string label, double? from, double? to)

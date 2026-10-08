@@ -141,6 +141,9 @@ namespace Lookout
                     ? $"Recognized: {string.Join(", ", allNames)}"
                     : "No faces recognized");
 
+                if (allNames.Count > 0)
+                    LocalStore.SetFaces(task.EventId, string.Join(", ", allNames));
+
                 if (Program.goAI)
                 {
                     string enrichedPrompt = task.AIPrompt;

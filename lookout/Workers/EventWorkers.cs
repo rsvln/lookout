@@ -52,7 +52,8 @@ namespace Lookout
                                        L10n.Tg.T("caption.start") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.start_time).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" +
                                        (fe.after.end_time.HasValue ? L10n.Tg.T("caption.end") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.end_time.Value).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" : "") +
                                        L10n.Tg.T("caption.event") + " " + fe.after.id;
-                    ExtraNotify("event", fe.after.id, camera, tgcaption, imagePaths);
+                    tgcaption = TrackSent("event", fe.after.id, camera, tgcaption, imagePaths,
+                        fe.after.label, fe.after.start_time, fe.after.end_time, ZonesOf(fe.after), fe.after.score);
 
                     int x = 1;
                     foreach (var chid in settings.telegram.chatids)
@@ -315,6 +316,8 @@ namespace Lookout
                                     L10n.Tg.T("caption.object") + " " + rulabel + "\n" +
                                     L10n.Tg.T("caption.start") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.start_time).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" +
                                     (fe.after.end_time.HasValue ? L10n.Tg.T("caption.end") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.end_time.Value).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" : "");
+                        tgcaption = TrackSent("event", fe.after.id, camera, tgcaption, new[] { snapPath },
+                            fe.after.label, fe.after.start_time, fe.after.end_time, ZonesOf(fe.after), fe.after.score);
 
                         md.Add(new InputMediaPhoto(
                             new InputFileStream(System.IO.File.OpenRead(snapPath), fe.after.camera + "-" + fe.after.id + ".jpg"))
@@ -322,7 +325,6 @@ namespace Lookout
                             Caption = tgcaption,
                             ParseMode = ParseMode.Markdown
                         });
-                        ExtraNotify("event", fe.after.id, camera, tgcaption, new[] { snapPath });
 
                         if ((md.Count > 0) && (!Cam(cami).sctogether || !Cam(cami).clip))
                         {

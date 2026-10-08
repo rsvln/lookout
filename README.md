@@ -132,6 +132,7 @@ options:
   retry: 30                    # polling interval in seconds
   sendeverythingwhatyouhave: true  # send partial clips if timeout expires
   gifwidth: 640                # GIF preview width in pixels (height is proportional)
+  correlate: 0                 # seconds; events of different cameras in this window share an incident (0 = off)
   locale:                      # languages: en, ru, uk, es (files in locales/); "locale: ru" sets one for everything
     web: en                    # web UI
     telegram: ru               # Telegram messages and commands
@@ -244,6 +245,12 @@ The `telegram:` block still sends albums the way it always did. An optional `not
 
 Failed extra notifiers go through the retry queue (`kind: notify`) when `options.retrymax` is set.
 
+## Local event database
+
+Lookout writes sent events, AI descriptions and recognized faces to `lookout.db` next to the YAML config (`/etc/lookout/lookout.db` in the usual container setup). The Search tab uses that file for face names and AI text; camera / object / id / zone still come from Frigate as well.
+
+`options.correlate` (seconds, default `0` = off) groups events of different cameras in that window into one incident: the later caption lists the other cameras, and the AI prompt gets them as context.
+
 ## Localization
 
 Telegram messages, bot commands, the web UI and AI descriptions are translated. `options.locale` sets the language: one value for all of them (`locale: ru`), or `web`, `telegram` and `ai` under it for each separately, e.g. the web UI in English with Telegram and AI in Russian. Default is `en`, also for an area left out.
@@ -259,10 +266,11 @@ Available at `http://<host>:8888`. The Config tab shows the bot token and MQTT p
 - **Log** — live log viewer with filtering by type, camera, text, color-coded by event ID
 - **Last** — latest N events of every camera (grouped by camera) or the history of one camera, as snapshot cards with object, score, time and zones. Click a snapshot to enlarge it. Every card has **▶ Video** (plays the clip in the page, with seeking) and **⬇** (downloads it); the clip is built from the camera's recording segments, so it works even when Frigate has no clip of its own, and for an event still in progress it covers the recording up to now. In-progress events show the current frame from Frigate
 - **Stats** — events / alerts / detections for a period (24 h, today, 7 d, 30 d), cameras × objects matrix, activity by hour of day and by day. The object filter defaults to **Config** — only cameras and objects (with their `percent` thresholds) the bot is configured to send; **All** shows everything Frigate saw. Click a matrix cell to drill down; **← Back** returns to the previous view or to the overview
+- **Search** — events by camera, object, time, id, zone, recognized face or AI description (`lookout.db`)
 - **Config** — YAML editor with syntax highlighting, error underlining, line numbers, folding and search (Ctrl+F); Tab and pasted tabs become spaces. **Save** writes the file (with a `.bak` backup), **Apply** restarts the services with the saved file, **Save & apply** does both. A config with YAML errors or missing sections is not saved
 - **About** — version, build date, links and this manual with highlighted code
 
-Every view has its own address, with the filters in it, so it can be bookmarked or shared and the browser's Back / Forward work: `/log?camera=homecam02&type=review`, `/last?camera=homecam01&label=car`, `/stats?period=7d&label=person`, `/stats/events?period=24h&camera=homecam01&hour=8` (the events behind a stats cell or chart bar), `/event/<id>` (one event; the time on every card links to it), `/config`, `/about`. Opening `/` shows the view seen last. The version and build date are shown in the footer of every page.
+Every view has its own address, with the filters in it, so it can be bookmarked or shared and the browser's Back / Forward work: `/log?camera=homecam02&type=review`, `/last?camera=homecam01&label=car`, `/stats?period=7d&label=person`, `/stats/events?period=24h&camera=homecam01&hour=8` (the events behind a stats cell or chart bar), `/search?q=person`, `/event/<id>` (one event; the time on every card links to it), `/config`, `/about`. Opening `/` shows the view seen last. The version and build date are shown in the footer of every page.
 
 ## Telegram commands
 

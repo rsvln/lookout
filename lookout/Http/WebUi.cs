@@ -91,6 +91,7 @@ namespace Lookout
         static object EventJson(EventRow r) => new
         {
             r.id, r.camera, r.label, r.sub_label, r.score, r.start_time, r.end_time, r.zones, r.has_snapshot, r.has_clip,
+            r.ai_text, r.faces, r.incident_id,
             start_local = StatsService.ToLocal(r.start_time).ToString("yyyy-MM-dd HH:mm:ss")
         };
 

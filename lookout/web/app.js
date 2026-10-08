@@ -252,7 +252,9 @@ function eventCard(r) {
           <span class="score">${Math.round(r.score * 100)}%</span></div>
         <div class="row1"><span class="cam">${esc(r.camera)}${r.end_time === null ? ` <span class="live">● ${esc(t('web.in_progress'))}</span>` : ''}</span>
           <span class="when" title="${esc(ago(r.start_time))}"><a href="/event/${encodeURIComponent(r.id)}">${esc(r.start_local)}</a></span></div>
-        ${r.zones.length ? `<div class="zones">${esc(r.zones.join(', '))}</div>` : ''}
+        ${r.zones && r.zones.length ? `<div class="zones">${esc(r.zones.join(', '))}</div>` : ''}
+        ${r.faces ? `<div class="zones">👤 ${esc(r.faces)}</div>` : ''}
+        ${r.ai_text ? `<div class="zones">${esc(r.ai_text)}</div>` : ''}
         <div class="actions">
           <button class="act" data-id="${esc(r.id)}" onclick="openVideo(this.dataset.id)">${ICON_PLAY} ${esc(t('web.video'))}</button>
           <a class="act" href="/api/clip/${encodeURIComponent(r.id)}?download=1" title="${esc(t('web.download'))}">${ICON_DOWNLOAD}</a>

@@ -199,6 +199,8 @@ namespace Lookout
         // and the first delay in seconds, doubled for every next repeat.
         public int retrymax { get; set; } = 0;
         public int retrybackoff { get; set; } = 30;
+        // Seconds: events of different cameras in this window share an incident (caption + AI context). 0 = off.
+        public int correlate { get; set; } = 0;
         // Quiet hours for every camera that has no `quiet` of its own.
         public QuietSettings quiet { get; set; }
         // Buttons under each notification: Clip, Open in Lookout (needs web.publicurl), Mute the camera for an hour.
@@ -406,6 +408,9 @@ namespace Lookout
         public List<string> zones { get; set; } = new List<string>();
         public bool has_snapshot { get; set; }
         public bool has_clip { get; set; }
+        public string ai_text { get; set; }
+        public string faces { get; set; }
+        public string incident_id { get; set; }
     }
 
     public class MetaResult

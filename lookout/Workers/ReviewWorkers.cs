@@ -51,6 +51,10 @@ namespace Lookout
                                        L10n.Tg.T("caption.start") + " " + DateTime.UnixEpoch.AddSeconds(fr.after.start_time).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" +
                                        (fr.after.end_time.HasValue ? L10n.Tg.T("caption.end") + " " + DateTime.UnixEpoch.AddSeconds(fr.after.end_time.Value).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" : "") +
                                        L10n.Tg.T("caption.events") + " " + string.Join(", ", fr.after.data.detections);
+                    var imagePaths = fr.after.data.detections.Select(ev => snaps[ev]).ToList();
+                    tgcaption = TrackSent("review", fr.after.id, camera, tgcaption, imagePaths,
+                        fr.after.data.objects == null ? null : string.Join(",", fr.after.data.objects),
+                        fr.after.start_time, fr.after.end_time, fr.after.data.zones, 0);
 
                     List<IAlbumInputMedia> md = new List<IAlbumInputMedia>();
                     int i = 1;
@@ -68,9 +72,7 @@ namespace Lookout
 
                     if (md.Count > 0)
                     {
-                        var imagePaths = fr.after.data.detections.Select(ev => snaps[ev]).ToList();
                         string aiPrompt = AiPrompt(fr.after.data.objects.Contains("person"));
-                        ExtraNotify("review", fr.after.id, camera, tgcaption, imagePaths);
 
                         int x = 1;
                         foreach (var chid in settings.telegram.chatids)
@@ -327,6 +329,9 @@ namespace Lookout
                                 L10n.Tg.T("caption.start") + " " + DateTime.UnixEpoch.AddSeconds(fr.after.start_time).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" +
                                 (fr.after.end_time.HasValue ? L10n.Tg.T("caption.end") + " " + DateTime.UnixEpoch.AddSeconds(fr.after.end_time.Value).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" : "") +
                                 L10n.Tg.T("caption.events") + " " + string.Join(", ", fr.after.data.detections);
+                    tgcaption = TrackSent("review", fr.after.id, camera, tgcaption, snaps.Values,
+                        fr.after.data.objects == null ? null : string.Join(",", fr.after.data.objects),
+                        fr.after.start_time, fr.after.end_time, fr.after.data.zones, 0);
 
                     int i = 1;
                     foreach (var ev in fr.after.data.detections)
@@ -345,9 +350,6 @@ namespace Lookout
                         if (i == settings.telegram.mediagrouplimit - 1) break;
                         i++;
                     }
-                    if (snaps.Count > 0)
-                        ExtraNotify("review", fr.after.id, camera, tgcaption, snaps.Values);
-
                     if ((md.Count > 0) && (!Cam(cami).sctogether || !Cam(cami).clip))
                     {
                         firstmessage = true;

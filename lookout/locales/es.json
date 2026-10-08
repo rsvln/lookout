@@ -18,6 +18,8 @@
   "caption.photo": "foto",
   "caption.video": "vídeo",
   "caption.ai": "IA:",
+  "caption.related": "También:",
+  "ai.prompt.related": "También en otras cámaras: {0}.",
   "ai.prompt.human": "Describe brevemente qué hace la persona. Qué lleva o tiene en las manos? 2-3 frases. No empieces con «La imagen muestra». No menciones la cámara, la hora, la fecha ni textos superpuestos.",
   "ai.prompt.nonhuman": "Describe brevemente qué ocurre. 2-3 frases. No empieces con «La imagen muestra». No menciones la cámara, la hora, la fecha ni textos superpuestos.",
   "ai.reply_language": "Responde en español.",
@@ -178,7 +180,7 @@
   "web.search.to": "Hasta:",
   "web.search.submit": "Buscar",
   "web.search.empty": "Nada encontrado",
-  "web.search.hint": "Busca eventos por cámara, objeto, id o zona. Cara y texto de IA necesitan la base local de eventos.",
+  "web.search.hint": "Busca eventos por cámara, objeto, id, zona, cara o descripción de IA.",
   "web.share_clip": "Copiar un enlace firmado al clip",
   "web.share_copied": "Enlace copiado",
   "web.share_failed": "No se pudo copiar el enlace",
@@ -232,5 +234,6 @@
   "web.field.topic": "Topic",
   "web.field.snapshottrigger": "Disparador de captura",
   "web.field.cooldown": "Pausa (min)",
-  "web.field.cooldownperobject": "Pausa por objeto"
+  "web.field.cooldownperobject": "Pausa por objeto",
+  "web.field.correlate": "Correlación (s)"
 }

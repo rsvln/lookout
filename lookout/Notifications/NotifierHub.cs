@@ -119,5 +119,24 @@ namespace Lookout
                 Silent = NotifySilent
             });
         }
+
+        // Extra notifiers + local DB; when options.correlate is set, related cameras are appended to the caption.
+        internal static string TrackSent(string kind, string id, string camera, string body, IEnumerable<string> snapshots,
+            string label, double start, double? end, IEnumerable<string> zones, double score)
+        {
+            string incident = LocalStore.LinkIncident(id, camera, start);
+            if (!string.IsNullOrEmpty(incident))
+            {
+                string others = LocalStore.OtherCameras(incident, camera);
+                if (!string.IsNullOrEmpty(others))
+                    body += "\n" + L10n.Tg.T("caption.related") + " " + others;
+            }
+            ExtraNotify(kind, id, camera, body, snapshots);
+            LocalStore.Record(id, kind, camera, label, start, end, zones, score, body, incident);
+            return body;
+        }
+
+        internal static IEnumerable<string> ZonesOf(BeforeAfterFE a) =>
+            (a?.entered_zones ?? a?.current_zones ?? new List<object>()).Select(z => z?.ToString()).Where(s => !string.IsNullOrEmpty(s));
     }
 }

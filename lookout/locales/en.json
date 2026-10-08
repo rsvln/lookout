@@ -21,6 +21,8 @@
   "caption.video": "video",
 
   "caption.ai": "AI:",
+  "caption.related": "Also:",
+  "ai.prompt.related": "Also seen on other cameras: {0}.",
   "ai.prompt.human": "Briefly describe what the person is doing. What are they holding or carrying? 2-3 sentences. Don't start with 'The image shows'. Don't mention the camera, time, date or text overlays.",
   "ai.prompt.nonhuman": "Briefly describe what is happening. 2-3 sentences. Don't start with 'The image shows'. Don't mention the camera, time, date or text overlays.",
   "ai.reply_language": "Answer in English.",
@@ -187,7 +189,7 @@
   "web.search.to": "To:",
   "web.search.submit": "Search",
   "web.search.empty": "Nothing found",
-  "web.search.hint": "Search events by camera, object, id or zone. Face and AI text search needs the local event database.",
+  "web.search.hint": "Search events by camera, object, id, zone, face name or AI description.",
   "web.share_clip": "Copy a signed clip link",
   "web.share_copied": "Link copied",
   "web.share_failed": "Could not copy the link",
@@ -241,5 +243,6 @@
   "web.field.topic": "Topic",
   "web.field.snapshottrigger": "Snapshot trigger",
   "web.field.cooldown": "Cooldown (min)",
-  "web.field.cooldownperobject": "Cooldown per object"
+  "web.field.cooldownperobject": "Cooldown per object",
+  "web.field.correlate": "Correlate (s)"
 }
