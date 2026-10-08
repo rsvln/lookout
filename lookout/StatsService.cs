@@ -84,13 +84,13 @@ namespace Lookout
                                            "), taking them from Frigate's API. Check that Frigate's clips folder is mounted there");
         }
 
-        // Current best frame of an event from Frigate's HTTP API, or null if Frigate doesn't have one.
-        // Full snapshot first; thumbnail is what Frigate keeps for events that never got a saved snapshot.
+        // Current best full frame of an event from Frigate's HTTP API, or null if Frigate doesn't have one.
+        // Thumbnail is a tight crop around the object — that looks like a cut-out in /last albums, so it is not used.
         public static async Task<byte[]> GetFrigateSnapshotAsync(string eventId)
         {
             var f = Program.settings.frigate;
             string root = "http://" + f.host + ":" + f.port + "/api/events/" + Uri.EscapeDataString(eventId);
-            foreach (var suffix in new[] { "/snapshot.jpg", "/thumbnail.jpg", "/snapshot.webp", "/thumbnail.webp" })
+            foreach (var suffix in new[] { "/snapshot.jpg?crop=0", "/snapshot.webp?crop=0" })
             {
                 try
                 {
