@@ -221,6 +221,7 @@
   "web.field.to": "Quiet to",
   "web.field.mode": "Quiet mode",
   "web.field.url": "URL",
+  "web.field.provider": "Provider",
   "web.field.model": "Model",
   "web.field.humanprompt": "Person prompt",
   "web.field.nonhumanprompt": "Other prompt",

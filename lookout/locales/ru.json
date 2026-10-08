@@ -221,6 +221,7 @@
   "web.field.to": "Тихие часы до",
   "web.field.mode": "Режим тихих часов",
   "web.field.url": "URL",
+  "web.field.provider": "Провайдер",
   "web.field.model": "Модель",
   "web.field.humanprompt": "Промпт для людей",
   "web.field.nonhumanprompt": "Промпт для остального",

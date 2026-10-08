@@ -10,11 +10,7 @@ namespace Lookout
         private readonly ITelegramBotClient tgBotClient;
         private readonly SemaphoreSlim semaphore;
         private readonly CancellationTokenSource cts;
-        private readonly string aiApiUrl;
-        private readonly string aiModel;
-        private readonly int numPredict;
-        private readonly double temperature;
-        private readonly bool thinking;
+        private readonly IAiProvider provider;
         private readonly int resizeToWidth;
         private int activeCount = 0;
 
@@ -25,15 +21,12 @@ namespace Lookout
             AISettings aiSettings,
             int maxConcurrentRequests = 2)
         {
-            aiApiUrl = aiSettings.url;
-            aiModel = aiSettings.model;
-            numPredict = aiSettings.numpredict;
-            temperature = aiSettings.temperature;
             resizeToWidth = aiSettings.resizetowidth;
             tgBotClient = botClient;
             httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+            provider = AiProviders.Create(aiSettings, httpClient);
             semaphore = new SemaphoreSlim(2);
-            cts = new CancellationTokenSource();            
+            cts = new CancellationTokenSource();
         }
 
         public void Start()
@@ -200,44 +193,7 @@ namespace Lookout
                         Program.Log("ai", eventId, camera, "Resize failed, sending original image");
                 }
                 
-                var imageBase64 = Convert.ToBase64String(imageBytes);
-
-                var requestBody = new
-                {
-                    model = aiModel,
-                    prompt = thinking ? prompt : "/no_think " + prompt,
-                    images = new[] { imageBase64 },
-                    stream = false,
-                    options = new
-                    {
-                        num_predict = numPredict,
-                        temperature = temperature
-                    }
-                };
-
-                var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync($"{aiApiUrl}/api/generate", content);
-                response.EnsureSuccessStatusCode();
-
-                var responseJson = await response.Content.ReadAsStringAsync();
-                
-                var ollamaResponse = System.Text.Json.JsonSerializer.Deserialize<OllamaResponse>(responseJson);
-
-                var description = (!string.IsNullOrEmpty(ollamaResponse?.response)
-                                    ? ollamaResponse.response
-                                    : ollamaResponse?.thinking)?.Trim();
-
-                if (!string.IsNullOrEmpty(description))
-                {
-                    int closeIdx = description.IndexOf("</think>");
-                    if (closeIdx >= 0)
-                        description = description.Substring(closeIdx + 8).Trim();
-                    else if (description.Contains("<think>"))
-                        description = description.Substring(0, description.IndexOf("<think>")).Trim();
-                }
-
+                var description = await provider.DescribeAsync(imageBytes, prompt);
                 if (string.IsNullOrEmpty(description))
                     return null;
 
@@ -246,7 +202,9 @@ namespace Lookout
             catch (Exception ex)
             {
                 Program.Log("ai", eventId, camera, $"API call failed: {ex.Message}");
-                Metrics.Inc("lookout_ollama_errors_total");
+                Metrics.Inc("lookout_ai_errors_total", "provider", provider.Name);
+                if (provider.Name == "ollama")
+                    Metrics.Inc("lookout_ollama_errors_total");
                 if (RetryQueue.Enabled)
                     throw;
                 return null;

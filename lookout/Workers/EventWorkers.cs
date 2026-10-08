@@ -46,16 +46,17 @@ namespace Lookout
                     string aiPrompt = AiPrompt(fe.after.label == "person");
                     var imagePaths = new List<string> { snapshotPath };
 
+                    string tgcaption = fe.after.id + " " + L10n.Tg.T("caption.photo") + "\n" +
+                                       L10n.Tg.T("caption.camera") + " " + fe.after.camera + "\n" +
+                                       L10n.Tg.T("caption.object") + " " + rulabel + "\n" +
+                                       L10n.Tg.T("caption.start") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.start_time).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" +
+                                       (fe.after.end_time.HasValue ? L10n.Tg.T("caption.end") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.end_time.Value).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" : "") +
+                                       L10n.Tg.T("caption.event") + " " + fe.after.id;
+                    ExtraNotify("event", fe.after.id, camera, tgcaption, imagePaths);
+
                     int x = 1;
                     foreach (var chid in settings.telegram.chatids)
                     {
-                        string tgcaption = fe.after.id + " " + L10n.Tg.T("caption.photo") + "\n" +
-                                           L10n.Tg.T("caption.camera") + " " + fe.after.camera + "\n" +
-                                           L10n.Tg.T("caption.object") + " " + rulabel + "\n" +
-                                           L10n.Tg.T("caption.start") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.start_time).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" +
-                                           (fe.after.end_time.HasValue ? L10n.Tg.T("caption.end") + " " + DateTime.UnixEpoch.AddSeconds(fe.after.end_time.Value).AddMinutes(settings.options.timeoffset).ToString("yyyy-MM-dd HH:mm:ss") + "\n" : "") +
-                                           L10n.Tg.T("caption.event") + " " + fe.after.id;
-
                         Message msg = await TgCall(() => bot.SendPhoto(
                             chatId: chid, disableNotification: NotifySilent,
                             photo: InputFile.FromStream(System.IO.File.OpenRead(snapshotPath)),
@@ -321,6 +322,7 @@ namespace Lookout
                             Caption = tgcaption,
                             ParseMode = ParseMode.Markdown
                         });
+                        ExtraNotify("event", fe.after.id, camera, tgcaption, new[] { snapPath });
 
                         if ((md.Count > 0) && (!Cam(cami).sctogether || !Cam(cami).clip))
                         {

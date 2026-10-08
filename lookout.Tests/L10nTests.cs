@@ -24,6 +24,17 @@ namespace Lookout.Tests
         }
 
         [Fact]
+        public void UkrainianAndSpanish_AreLoadedFromTheirFiles()
+        {
+            L10n.Load("uk", "uk", "uk");
+            Assert.Equal("uk", L10n.Web.Locale);
+            Assert.Equal("людина", L10n.Tg.Label("person"));
+            L10n.Load("es", "es", "es");
+            Assert.Equal("es", L10n.Web.Locale);
+            Assert.Equal("persona", L10n.Tg.Label("person"));
+        }
+
+        [Fact]
         public void UnknownLocale_FallsBackToEnglish()
         {
             L10n.Load("xx", "xx", "xx");

@@ -23,6 +23,13 @@ namespace Lookout
                 return Task.CompletedTask;
             });
 
+            RetryQueue.Register("notify", job =>
+            {
+                var msg = JsonConvert.DeserializeObject<NotifyMessage>(job.Payload);
+                msg.RetryAttempt = job.Attempt;
+                return NotifierHub.SendAllAsync(NotifierHub.Current, msg);
+            });
+
             RetryQueue.Register("fr", job =>
             {
                 var task = JsonConvert.DeserializeObject<FRTask>(job.Payload);

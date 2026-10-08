@@ -70,6 +70,7 @@ namespace Lookout
                     {
                         var imagePaths = fr.after.data.detections.Select(ev => snaps[ev]).ToList();
                         string aiPrompt = AiPrompt(fr.after.data.objects.Contains("person"));
+                        ExtraNotify("review", fr.after.id, camera, tgcaption, imagePaths);
 
                         int x = 1;
                         foreach (var chid in settings.telegram.chatids)
@@ -344,6 +345,8 @@ namespace Lookout
                         if (i == settings.telegram.mediagrouplimit - 1) break;
                         i++;
                     }
+                    if (snaps.Count > 0)
+                        ExtraNotify("review", fr.after.id, camera, tgcaption, snaps.Values);
 
                     if ((md.Count > 0) && (!Cam(cami).sctogether || !Cam(cami).clip))
                     {

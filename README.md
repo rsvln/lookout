@@ -14,7 +14,7 @@ Previously named **frte2tg**.
 - Telegram rate limit handling with automatic retry; local Bot API server supported for large files
 
 **Recognition and AI**
-- **AI snapshot descriptions** via Ollama with a vision model (optional, per camera), in the language you choose
+- **AI snapshot descriptions** via Ollama (default), OpenAI-compatible APIs or Gemini, in the language you choose (optional, per camera)
 - **Face recognition** via CompreFace (optional, per camera); recognized names are passed to the AI as context
 
 **Telegram commands**
@@ -32,7 +32,8 @@ Previously named **frte2tg**.
 
 **Integration**
 - Re-publishes an event / review to MQTT with type `trueend` once its recording is complete, for automations (optional, per camera)
-- **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, easy to add more)
+- Extra notification channels besides Telegram: ntfy, Discord, Matrix, generic webhook (off until `notifiers:` is set)
+- **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, `uk`, `es`; add more with a JSON file)
 - Runs as a Docker container (Docker Hub and GitHub Container Registry)
 
 ## Requirements
@@ -42,7 +43,7 @@ Previously named **frte2tg**.
 - Telegram bot token + local Bot API server (optional but recommended for large files)
 - ffmpeg available in container (used for clips, GIFs and resizing snapshots for AI)
 - Frigate HTTP API reachable at `frigate.host:frigate.port` (for snapshots of in-progress events and clips in the web UI)
-- Ollama instance with a vision model (optional, for AI descriptions)
+- A vision model for AI descriptions (optional): Ollama by default, or an OpenAI-compatible / Gemini endpoint
 - [CompreFace](https://github.com/exadel-inc/CompreFace) instance (optional, for face recognition)
 
 ## Quick Start
@@ -131,7 +132,7 @@ options:
   retry: 30                    # polling interval in seconds
   sendeverythingwhatyouhave: true  # send partial clips if timeout expires
   gifwidth: 640                # GIF preview width in pixels (height is proportional)
-  locale:                      # languages: en, ru (files in locales/); "locale: ru" sets one for everything
+  locale:                      # languages: en, ru, uk, es (files in locales/); "locale: ru" sets one for everything
     web: en                    # web UI
     telegram: ru               # Telegram messages and commands
     ai: ru                     # AI prompts and descriptions
@@ -140,16 +141,37 @@ logger:
   file: true
   console: true
 
-# Optional: AI snapshot analysis via Ollama
+# Optional: AI snapshot analysis (Ollama by default)
 ai:
+  provider: ollama             # ollama | openai | gemini
   url: http://192.168.1.20:11434
   model: "qwen2.5vl:7b"
+  apikey:                      # OpenAI / Gemini; unused for Ollama
   humanprompt: "Briefly describe what the person is doing. What are they holding or carrying?"  # optional, default comes from locale.ai
   nonhumanprompt: "Briefly describe what is happening."                                          # optional, default comes from locale.ai
-  numpredict: 150              # max tokens in Ollama response, limits description length
+  numpredict: 150              # max tokens in the response, limits description length
   temperature: 0.1             # lower = more deterministic, higher = more creative
-  resizetowidth: 640           # resize image before sending to Ollama, 0 to disable
+  resizetowidth: 640           # resize image before sending to the model, 0 to disable
   thinking: false              # enable chain-of-thought thinking mode; only useful for debugging, not recommended for production use
+
+# Optional extra channels besides telegram: (caption + first snapshot, once per event/review)
+# notifiers:
+#   - type: ntfy
+#     url: https://ntfy.sh/lookout
+#     token:                       # optional Bearer token
+#     title: Lookout
+#     attach: true                 # attach the first snapshot
+#   - type: discord
+#     url: https://discord.com/api/webhooks/...
+#   - type: matrix
+#     homeserver: https://matrix.example
+#     token: syt_...
+#     room: "!roomid:example"
+#   - type: webhook
+#     url: http://127.0.0.1:9000/hook
+#   - type: telegram               # extra chats; the telegram: block is still sent by workers
+#     chatids:
+#       - '-1001234567890'
 
 # Optional: face recognition via CompreFace
 fr:
@@ -189,7 +211,7 @@ When `gif: true` is set for a camera, Lookout generates an animated GIF from the
 
 When the `fr` section is present and `url`/`apikey` are set, enabling `fr: true` on a camera will run face recognition on snapshots via [CompreFace](https://github.com/exadel-inc/CompreFace) before posting results to Telegram.
 
-If `ai: true` is also enabled on the camera, recognized names are automatically passed to Ollama as context, enriching the description prompt. If only `fr` is enabled without `ai`, the caption is updated with recognized names directly.
+If `ai: true` is also enabled on the camera, recognized names are automatically passed to the AI as context, enriching the description prompt. If only `fr` is enabled without `ai`, the caption is updated with recognized names directly.
 
 To set up CompreFace, use the provided [`docker-compose-compreface.yml`](https://github.com/rsvln/lookout/blob/master/docker-compose-compreface.yml) (`docker compose -f docker-compose-compreface.yml up -d`; its web UI is on port 8000, which is the address for `fr.url`), then open the web UI, create an application, add a Recognition Service, and upload face photos for each person via the Train section.
 
@@ -197,14 +219,38 @@ To set up CompreFace, use the provided [`docker-compose-compreface.yml`](https:/
 
 When the `ai` section is present and `url`/`model` are set, enabling `ai: true` on a camera will:
 
-1. Send all snapshots to Ollama after posting to Telegram
+1. Send all snapshots to the configured provider after posting to Telegram
 2. Edit the Telegram message caption with AI descriptions for each snapshot
+
+`ai.provider` is `ollama` by default. `openai` talks to `{url}/v1/chat/completions` with `Authorization: Bearer {apikey}` (any OpenAI-compatible server). `gemini` talks to `{url or https://generativelanguage.googleapis.com}/v1beta/models/{model}:generateContent?key=`.
 
 Uses the `humanprompt` if Frigate detected a person, `nonhumanprompt` otherwise. Without them, the default prompts of the `locale.ai` language are used. When `options.locale.ai` is set, every prompt ends with "answer in <that language>", so descriptions come in that language whatever language the prompt is written in; without it the prompts are sent as written. If face recognition is also enabled, recognized names are prepended to the prompt automatically.
 
-Snapshots wider than `resizetowidth` are downscaled with ffmpeg before being sent to Ollama.
+Snapshots wider than `resizetowidth` are downscaled with ffmpeg before being sent to the model.
 
 Tested with `qwen2.5vl:7b` on a machine with RTX 3060 — ~2 seconds per image.
+
+## Extra notifiers
+
+The `telegram:` block still sends albums the way it always did. An optional `notifiers:` list adds other channels; each gets the caption and the first snapshot once per event or review (not once per Telegram chat). Omit the section and nothing extra is sent.
+
+| `type` | Required | Notes |
+|--------|----------|--------|
+| `ntfy` | `url` | POST to the topic URL; optional `token`, `title`, `attach` |
+| `discord` | `url` | Incoming webhook; snapshot as an attachment |
+| `matrix` | `homeserver`, `token`, `room` | Uploads the snapshot then `m.room.message` |
+| `webhook` | `url` | JSON `{kind,id,camera,body,silent}` |
+| `telegram` | `chatids` | Extra chats only; does not replace `telegram:` |
+
+Failed extra notifiers go through the retry queue (`kind: notify`) when `options.retrymax` is set.
+
+## Localization
+
+Telegram messages, bot commands, the web UI and AI descriptions are translated. `options.locale` sets the language: one value for all of them (`locale: ru`), or `web`, `telegram` and `ai` under it for each separately, e.g. the web UI in English with Telegram and AI in Russian. Default is `en`, also for an area left out.
+
+Strings live in `locales/<locale>.json` next to the app (`/app/locales` in the container), one flat `"key": "text"` file per language; `en.json`, `ru.json`, `uk.json` and `es.json` are included. To add a language, copy `en.json`, translate the values and set `locale:` to that file's name (or that name for one area). Keys missing in a translation fall back to English.
+
+Object names from every locale file are understood in commands, e.g. `/last человек` works with any `locale`.
 
 ## Web UI
 
@@ -217,14 +263,6 @@ Available at `http://<host>:8888`. The Config tab shows the bot token and MQTT p
 - **About** — version, build date, links and this manual with highlighted code
 
 Every view has its own address, with the filters in it, so it can be bookmarked or shared and the browser's Back / Forward work: `/log?camera=homecam02&type=review`, `/last?camera=homecam01&label=car`, `/stats?period=7d&label=person`, `/stats/events?period=24h&camera=homecam01&hour=8` (the events behind a stats cell or chart bar), `/event/<id>` (one event; the time on every card links to it), `/config`, `/about`. Opening `/` shows the view seen last. The version and build date are shown in the footer of every page.
-
-## Localization
-
-Telegram messages, bot commands, the web UI and AI descriptions are translated. `options.locale` sets the language: one value for all of them (`locale: ru`), or `web`, `telegram` and `ai` under it for each separately, e.g. the web UI in English with Telegram and AI in Russian. Default is `en`, also for an area left out.
-
-Strings live in `locales/<locale>.json` next to the app (`/app/locales` in the container), one flat `"key": "text"` file per language; `en.json` and `ru.json` are included. To add a language, copy `en.json` to e.g. `de.json`, translate the values and set `locale: de` (or `de` for one area). Keys missing in a translation fall back to English.
-
-Object names from every locale file are understood in commands, e.g. `/last человек` works with any `locale`.
 
 ## Telegram commands
 

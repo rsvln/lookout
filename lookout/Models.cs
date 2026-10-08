@@ -67,6 +67,21 @@ namespace Lookout
         public AISettings ai { get; set; }
         public FRSettings fr { get; set; }
         public WebSettings web { get; set; }
+        // Extra channels besides the `telegram:` block (ntfy, Discord, Matrix, webhook). Off when omitted.
+        public List<NotifierSettings> notifiers { get; set; } = new List<NotifierSettings>();
+    }
+
+    public class NotifierSettings
+    {
+        public string type { get; set; }
+        public string url { get; set; }
+        public string token { get; set; }
+        public string apikey { get; set; }
+        public string homeserver { get; set; }
+        public string room { get; set; }
+        public string title { get; set; }
+        public bool attach { get; set; } = true;
+        public List<string> chatids { get; set; }
     }
 
     // Optional web UI login (HTTP Basic); when user or password is empty the UI is open.
@@ -238,8 +253,11 @@ namespace Lookout
 
     public class AISettings
     {
+        // ollama (default), openai (OpenAI-compatible /v1/chat/completions), gemini
+        public string provider { get; set; } = "ollama";
         public string url { get; set; }
         public string model { get; set; }
+        public string apikey { get; set; }
         public string humanprompt { get; set; }
         public string nonhumanprompt { get; set; }
         public int numpredict { get; set; } = 150;

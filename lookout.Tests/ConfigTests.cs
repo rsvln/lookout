@@ -64,6 +64,22 @@ namespace Lookout.Tests
             Assert.True(s.logger.file);
             Assert.Null(s.ai);
             Assert.Null(s.web);
+            Assert.Empty(s.notifiers);
+        }
+
+        [Fact]
+        public void Ai_ProviderDefaultsToOllama()
+        {
+            var s = Parse(Minimal + "\nai:\n  url: http://127.0.0.1:11434\n  model: llava\n");
+            Assert.Equal("ollama", s.ai.provider);
+        }
+
+        [Fact]
+        public void Notifiers_ParsesNtfyAndWebhook()
+        {
+            var s = Parse(Minimal + "\nnotifiers:\n  - type: ntfy\n    url: https://ntfy.sh/alerts\n  - type: webhook\n    url: http://127.0.0.1/hook\n");
+            Assert.Equal(new[] { "ntfy", "webhook" }, s.notifiers.Select(n => n.type));
+            Assert.True(s.notifiers[0].attach);
         }
 
         [Fact]
@@ -88,8 +104,8 @@ namespace Lookout.Tests
         [Fact]
         public void Locale_AiExplicitIsRemembered()
         {
-            var s = Parse(Minimal.Replace("options:\n  timeoffset: 120", "options:\n  locale:\n    ai: de\n  timeoffset: 120"));
-            Assert.Equal("de", s.options.locale.ai);
+            var s = Parse(Minimal.Replace("options:\n  timeoffset: 120", "options:\n  locale:\n    ai: uk\n  timeoffset: 120"));
+            Assert.Equal("uk", s.options.locale.ai);
             Assert.True(s.options.locale.aiExplicit);
         }
 

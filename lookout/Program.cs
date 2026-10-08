@@ -70,6 +70,7 @@ namespace Lookout
 
             RegisterRetryHandlers();
             RetryQueue.Start();
+            NotifierHub.Reload(settings.notifiers);
 
             if (goAI) { aiQueue.Stop(); goAI = false; }
             if (goFR) { frQueue.Stop(); goFR = false; }
