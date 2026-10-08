@@ -168,6 +168,23 @@ namespace Lookout.Tests
         }
 
         [Fact]
+        public void SnapshotPath_FindsWebpInClips()
+        {
+            string clips = Program.settings.frigate.clipspath;
+            Directory.CreateDirectory(clips);
+            string file = Path.Combine(clips, "front-w1.webp");
+            File.WriteAllBytes(file, new byte[] { 0x52, 0x49, 0x46, 0x46 });
+            try
+            {
+                Assert.Equal(file, StatsService.SnapshotPath("front", "w1"));
+            }
+            finally
+            {
+                try { File.Delete(file); } catch { }
+            }
+        }
+
+        [Fact]
         public void GetMeta_ListsCamerasAndLabels()
         {
             TestEnv.AddEvent(db, "a", "front", "person", 0.9, TestEnv.Now(-100));

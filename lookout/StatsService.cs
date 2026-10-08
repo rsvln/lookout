@@ -32,10 +32,16 @@ namespace Lookout
 
         static IEnumerable<string> SnapshotCandidates(string camera, string id)
         {
-            string clips = Program.settings.frigate.clipspath ?? "";
-            yield return clips + "/" + camera + "-" + id + ".jpg";
-            yield return clips + "/" + camera + "/" + id + ".jpg";
-            yield return clips + "/" + id + ".jpg";
+            string clips = Program.settings.frigate?.clipspath ?? "";
+            if (!string.IsNullOrEmpty(clips))
+            {
+                foreach (var ext in new[] { ".jpg", ".webp" })
+                {
+                    yield return Path.Combine(clips, camera + "-" + id + ext);
+                    yield return Path.Combine(clips, camera ?? "", id + ext);
+                    yield return Path.Combine(clips, id + ext);
+                }
+            }
             yield return Path.Combine(Program.appLocation ?? "", "live", camera + "-" + id + ".jpg");
         }
 
@@ -84,7 +90,7 @@ namespace Lookout
         {
             var f = Program.settings.frigate;
             string root = "http://" + f.host + ":" + f.port + "/api/events/" + Uri.EscapeDataString(eventId);
-            foreach (var suffix in new[] { "/snapshot.jpg", "/thumbnail.jpg" })
+            foreach (var suffix in new[] { "/snapshot.jpg", "/thumbnail.jpg", "/snapshot.webp", "/thumbnail.webp" })
             {
                 try
                 {
@@ -209,7 +215,7 @@ namespace Lookout
             while (dr.Read())
             {
                 known++;
-                string real = dr.GetString(0).Replace(f.recordingsoriginalpath, f.recordingspath);
+                string real = dr.GetString(0).Replace(f.recordingsoriginalpath ?? "", f.recordingspath ?? "");
                 if (System.IO.File.Exists(real))
                     result.Add(real);
             }
@@ -332,7 +338,7 @@ namespace Lookout
             if (camera != null) cmd.Parameters.AddWithValue("$camera", camera);
             if (label != null) cmd.Parameters.AddWithValue("$label", label);
             cmd.Parameters.AddWithValue("$limit", limit);
-            return ReadEvents(cmd);
+            return WithLocal(ReadEvents(cmd));
         }
 
         // Latest `perCamera` events of every camera (optionally of one label only), grouped by camera:
@@ -352,7 +358,7 @@ namespace Lookout
             cmd.Parameters.AddWithValue("$from", Unix(DateTime.UtcNow.AddDays(-30)));
             cmd.Parameters.AddWithValue("$n", perCamera);
             if (label != null) cmd.Parameters.AddWithValue("$label", label);
-            return ReadEvents(cmd);
+            return WithLocal(ReadEvents(cmd));
         }
 
         // The events counted by GetStats with the same filters, newest first; `total` is their number before `limit`.
@@ -380,7 +386,7 @@ namespace Lookout
             if (day != null)
                 rows = rows.Where(r => ToLocal(r.start_time).ToString("yyyy-MM-dd") == day).ToList();
             total = rows.Count;
-            return rows.Take(limit).ToList();
+            return WithLocal(rows.Take(limit).ToList());
         }
 
         public static EventRow GetEvent(string id)
@@ -391,6 +397,53 @@ namespace Lookout
             using var cmd = new SqliteCommand(sql, db);
             cmd.Parameters.AddWithValue("$id", id);
             return ReadEvents(cmd).FirstOrDefault();
+        }
+
+        // Event id, or the first detection of a review (Lookout stores reviews under the review id).
+        public static EventRow ResolveEvent(string id)
+        {
+            var ev = GetEvent(id);
+            if (ev != null) return ev;
+            foreach (var d in GetReviewDetections(id))
+            {
+                ev = GetEvent(d);
+                if (ev != null) return ev;
+            }
+            return null;
+        }
+
+        static void OverlayLocal(EventRow row, EventRow extra)
+        {
+            if (row == null || extra == null) return;
+            if (!string.IsNullOrEmpty(extra.ai_text)) row.ai_text = extra.ai_text;
+            if (!string.IsNullOrEmpty(extra.faces))
+            {
+                row.faces = extra.faces;
+                if (string.IsNullOrEmpty(row.sub_label)) row.sub_label = extra.faces;
+            }
+            if (!string.IsNullOrEmpty(extra.incident_id)) row.incident_id = extra.incident_id;
+        }
+
+        static IEnumerable<string> EventIdsOf(string localId)
+        {
+            yield return localId;
+            foreach (var d in GetReviewDetections(localId))
+                yield return d;
+        }
+
+        static List<EventRow> WithLocal(List<EventRow> rows)
+        {
+            if (!LocalStore.IsOpen || rows == null || rows.Count == 0) return rows;
+            LocalStore.Fill(rows);
+            var map = new Dictionary<string, EventRow>(StringComparer.Ordinal);
+            foreach (var r in rows) map[r.id] = r;
+            double from = rows.Min(r => r.start_time) - 120;
+            double to = rows.Max(r => r.end_time ?? r.start_time) + 120;
+            foreach (var extra in LocalStore.Search(null, null, null, from, to, 500))
+                foreach (var id in EventIdsOf(extra.id))
+                    if (map.TryGetValue(id, out var row))
+                        OverlayLocal(row, extra);
+            return rows;
         }
 
         // Ids of the events (detections) a Frigate review consists of; empty if there is no such review.
@@ -587,16 +640,18 @@ namespace Lookout
             LocalStore.Fill(rows);
             foreach (var extra in LocalStore.Search(q, camera, label, from, to, limit))
             {
-                if (map.TryGetValue(extra.id, out var existing))
+                foreach (var id in EventIdsOf(extra.id).Distinct(StringComparer.Ordinal))
                 {
-                    existing.ai_text = extra.ai_text ?? existing.ai_text;
-                    existing.faces = extra.faces ?? existing.faces;
-                    existing.incident_id = extra.incident_id ?? existing.incident_id;
-                    if (string.IsNullOrEmpty(existing.sub_label) && !string.IsNullOrEmpty(extra.faces))
-                        existing.sub_label = extra.faces;
+                    if (map.TryGetValue(id, out var existing))
+                    {
+                        OverlayLocal(existing, extra);
+                        continue;
+                    }
+                    var ev = GetEvent(id);
+                    if (ev == null) continue;
+                    OverlayLocal(ev, extra);
+                    map[id] = ev;
                 }
-                else if (!string.IsNullOrWhiteSpace(q))
-                    map[extra.id] = extra;
             }
             var merged = map.Values.OrderByDescending(r => r.start_time).Take(limit).ToList();
             if (!string.IsNullOrWhiteSpace(q))

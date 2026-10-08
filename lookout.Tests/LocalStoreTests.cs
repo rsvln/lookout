@@ -93,5 +93,62 @@ namespace Lookout.Tests
             var overlay = Assert.Single(StatsService.Search("vis-1", null, null, null, null, 10, out _));
             Assert.Contains("yellow", overlay.ai_text);
         }
+
+        [Fact]
+        public void StatsSearch_JoinsReviewAiOntoTheDetectionEvent()
+        {
+            double t = TestEnv.Now(-40);
+            TestEnv.AddEvent(frigate, "det-1", "front", "person", 0.73, t, t + 5);
+            TestEnv.AddReview(frigate, "rev-1", "front", "alert", t + 7, "{\"detections\":[\"det-1\"],\"objects\":[\"person\"]}");
+            LocalStore.Record("rev-1", "review", "front", "person", t + 7, t + 10, null, 0, "cap", null);
+            LocalStore.SetAi("rev-1", "человек идёт по дорожке");
+
+            var rows = StatsService.Search("front", null, null, null, null, 20, out int total);
+            Assert.DoesNotContain(rows, r => r.id == "rev-1");
+            var ev = Assert.Single(rows, r => r.id == "det-1");
+            Assert.Equal(0.73, ev.score, 3);
+            Assert.Contains("дорожке", ev.ai_text);
+            Assert.True(total >= 1);
+        }
+
+        [Fact]
+        public void StatsSearch_ByAiText_ReturnsTheFrigateEventNotTheReview()
+        {
+            double t = TestEnv.Now(-20);
+            TestEnv.AddEvent(frigate, "det-2", "yard", "person", 0.8, t, t + 3);
+            TestEnv.AddReview(frigate, "rev-2", "yard", "alert", t, "{\"detections\":[\"det-2\"]}");
+            LocalStore.Record("rev-2", "review", "yard", "person", t, null, null, 0, "cap", null);
+            LocalStore.SetAi("rev-2", "wearing a blue jacket");
+
+            var rows = StatsService.Search("blue jacket", null, null, null, null, 10, out _);
+            var ev = Assert.Single(rows);
+            Assert.Equal("det-2", ev.id);
+            Assert.Equal(0.8, ev.score, 3);
+            Assert.Contains("blue jacket", ev.ai_text);
+        }
+
+        [Fact]
+        public void GetLast_OverlaysReviewAiOnTheEvent()
+        {
+            double t = TestEnv.Now(-15);
+            TestEnv.AddEvent(frigate, "det-3", "front", "person", 0.9, t, t + 2);
+            TestEnv.AddReview(frigate, "rev-3", "front", "alert", t, "{\"detections\":[\"det-3\"]}");
+            LocalStore.Record("rev-3", "review", "front", "person", t, null, null, 0, "cap", null);
+            LocalStore.SetAi("rev-3", "a person at the gate");
+
+            var ev = Assert.Single(StatsService.GetLast("front", null, 10), r => r.id == "det-3");
+            Assert.Contains("gate", ev.ai_text);
+        }
+
+        [Fact]
+        public void ResolveEvent_MapsAReviewIdToItsDetection()
+        {
+            double t = TestEnv.Now(-10);
+            TestEnv.AddEvent(frigate, "det-4", "front", "car", 0.6, t);
+            TestEnv.AddReview(frigate, "rev-4", "front", "alert", t, "{\"detections\":[\"det-4\"]}");
+            Assert.Equal("det-4", StatsService.ResolveEvent("rev-4").id);
+            Assert.Equal("det-4", StatsService.ResolveEvent("det-4").id);
+            Assert.Null(StatsService.ResolveEvent("missing"));
+        }
     }
 }

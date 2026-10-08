@@ -9,7 +9,7 @@ namespace Lookout
             {
                 try
                 {
-                    var ev = StatsService.GetEvent(id);
+                    var ev = StatsService.ResolveEvent(id);
                     var bytes = ev == null ? null : await StatsService.GetSnapshotAsync(ev);
                     return bytes == null ? Results.NotFound() : Results.File(bytes, "image/jpeg");
                 }
@@ -21,7 +21,7 @@ namespace Lookout
             {
                 try
                 {
-                    var ev = StatsService.GetEvent(id);
+                    var ev = StatsService.ResolveEvent(id);
                     string path = ev == null ? null : await StatsService.GetClipPathAsync(ev);
                     if (path == null)
                         return Results.NotFound();
