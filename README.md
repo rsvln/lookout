@@ -37,7 +37,7 @@ Previously named **frte2tg**.
 - Re-publishes an event / review to MQTT with type `trueend` once its recording is complete, for automations (optional, per camera)
 - Extra notification channels besides Telegram: ntfy, Discord, Matrix, generic webhook (off until `notifiers:` is set)
 - **`/health`** (MQTT, Frigate, ffmpeg, database) and Prometheus **`/metrics`**
-- **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, `uk`, `es`; add more with a JSON file)
+- **Localization**: web UI, Telegram and AI languages set separately (`en`, `ru`, `zh`, `es`; add more with a JSON file)
 - Runs as a Docker container (Docker Hub and GitHub Container Registry)
 
 ## Requirements
@@ -146,7 +146,7 @@ options:
   #   to: "07:00"
   #   mode: silent             # silent | snapshot | none
   correlate: 0                 # seconds; events of different cameras in this window share an incident (0 = off)
-  locale:                      # languages: en, ru, uk, es (files in locales/); "locale: ru" sets one for everything
+  locale:                      # languages: en, ru, zh, es (files in locales/); "locale: ru" sets one for everything
     web: en                    # web UI
     telegram: ru               # Telegram messages and commands
     ai: ru                     # AI prompts and descriptions
@@ -273,7 +273,7 @@ Lookout writes sent events, AI descriptions and recognized faces to `lookout.db`
 
 Telegram messages, bot commands, the web UI and AI descriptions are translated. `options.locale` sets the language: one value for all of them (`locale: ru`), or `web`, `telegram` and `ai` under it for each separately, e.g. the web UI in English with Telegram and AI in Russian. Default is `en`, also for an area left out.
 
-Strings live in `locales/<locale>.json` next to the app (`/app/locales` in the container), one flat `"key": "text"` file per language; `en.json`, `ru.json`, `uk.json` and `es.json` are included. To add a language, copy `en.json`, translate the values and set `locale:` to that file's name (or that name for one area). Keys missing in a translation fall back to English.
+Strings live in `locales/<locale>.json` next to the app (`/app/locales` in the container), one flat `"key": "text"` file per language; `en.json`, `ru.json`, `zh.json` and `es.json` are included. To add a language, copy `en.json`, translate the values and set `locale:` to that file's name (or that name for one area). Keys missing in a translation fall back to English.
 
 Object names from every locale file are understood in commands, e.g. `/last человек` works with any `locale`.
 

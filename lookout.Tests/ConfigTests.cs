@@ -105,8 +105,8 @@ namespace Lookout.Tests
         [Fact]
         public void Locale_AiExplicitIsRemembered()
         {
-            var s = Parse(Minimal.Replace("options:\n  timeoffset: 120", "options:\n  locale:\n    ai: uk\n  timeoffset: 120"));
-            Assert.Equal("uk", s.options.locale.ai);
+            var s = Parse(Minimal.Replace("options:\n  timeoffset: 120", "options:\n  locale:\n    ai: zh\n  timeoffset: 120"));
+            Assert.Equal("zh", s.options.locale.ai);
             Assert.True(s.options.locale.aiExplicit);
         }
 
