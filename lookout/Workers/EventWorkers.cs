@@ -24,6 +24,7 @@ namespace Lookout
         async static Task FrigateEventNewWorker(FrigateEvent fe, int attempt = 0)
         {
             RetryQueue.BeginRun();
+            NotifyContext.Begin(settings.frigate.cameras.Find(c => c.camera == fe.after.camera), fe.after.id);
             try
             {
                 string camera = fe.after.camera;
@@ -33,7 +34,7 @@ namespace Lookout
                 string rulabel = L10n.Tg.Label(fe.after.label.ToLower())
                                + " (" + (fe.after.score * 100).ToString("0.00") + "%)";
 
-                if (fe.after.has_snapshot && settings.frigate.cameras[cami].snapshot)
+                if (fe.after.has_snapshot && Cam(cami).snapshot)
                 {
                     var snaps = await WaitSnapshotsAsync(camera, new[] { fe.after.id }, "event", fe.after.id);
                     if (!snaps.TryGetValue(fe.after.id, out string snapshotPath))
@@ -56,7 +57,7 @@ namespace Lookout
                                            L10n.Tg.T("caption.event") + " " + fe.after.id;
 
                         Message msg = await TgCall(() => bot.SendPhoto(
-                            chatId: chid,
+                            chatId: chid, disableNotification: NotifySilent,
                             photo: InputFile.FromStream(System.IO.File.OpenRead(snapshotPath)),
                             caption: tgcaption,
                             parseMode: ParseMode.Markdown),
@@ -68,7 +69,7 @@ namespace Lookout
 
                         Log("event", fe.after.id, camera, "The snapshot was sent to telegram chat " + chid);
 
-                        if (goFR && settings.frigate.cameras[cami].fr)
+                        if (goFR && Cam(cami).fr)
                             frQueue.AddToQueue(new FRTask
                             {
                                 ImagePaths = imagePaths,
@@ -79,7 +80,7 @@ namespace Lookout
                                 EventId = fe.after.id,
                                 OriginalCaption = tgcaption
                             });
-                        else if (goAI && settings.frigate.cameras[cami].ai)
+                        else if (goAI && Cam(cami).ai)
                             aiQueue.AddToQueue(new AITask
                             {
                                 ImagePaths = imagePaths,
@@ -126,7 +127,7 @@ namespace Lookout
             var imagePaths = new List<string> { settings.frigate.clipspath + "/" + fe.after.camera + "-" + fe.after.id + ".jpg" };
             string aiPrompt = AiPrompt(fe.after.label == "person");
 
-            if (settings.frigate.cameras[cami].gif)
+            if (Cam(cami).gif)
             {
                 string gifPath = RunFfmpegGif(parts[0].path, settings.options.gifwidth);
                 if (System.IO.File.Exists(gifPath))
@@ -137,7 +138,7 @@ namespace Lookout
                         foreach (var chid in settings.telegram.chatids)
                         {
                             await TgCall(() => bot.SendAnimation(
-                                chatId: chid,
+                                chatId: chid, disableNotification: NotifySilent,
                                 animation: InputFile.FromStream(System.IO.File.OpenRead(gifPath), Path.GetFileName(gifPath)),
                                 caption: tgcaption,
                                 replyParameters: (firstmessages[chid] != -1) ? new ReplyParameters { MessageId = firstmessages[chid] } : null),
@@ -155,11 +156,11 @@ namespace Lookout
                 }
             }
 
-            if (settings.frigate.cameras[cami].clip)
+            if (Cam(cami).clip)
             {
                 await Task.Delay(settings.options.retry * 100);
 
-                if (settings.frigate.cameras[cami].sctogether && settings.frigate.cameras[cami].snapshot)
+                if (Cam(cami).sctogether && Cam(cami).snapshot)
                 {
                     for (int i = 1; i <= partid; i++)
                     {
@@ -175,13 +176,13 @@ namespace Lookout
                                 foreach (var chid in settings.telegram.chatids)
                                 {
                                     if (x > 1) await Task.Delay(settings.telegram.sendchatstimepause * 1000);
-                                    Message[] msgs = await TgCall(() => bot.SendMediaGroup(chatId: chid, media: md), "event", fe.after.id, camera);
+                                    Message[] msgs = await TgCall(() => bot.SendMediaGroup(chatId: chid, media: md, disableNotification: NotifySilent), "event", fe.after.id, camera);
                                     await Task.Delay(100);
                                     firstmessages[chid] = msgs[0].MessageId;
                                     Log("event", fe.after.id, camera, "The snapshot and clip was sent to telegram chat " + chid);
                                     x++;
 
-                                    if (goFR && settings.frigate.cameras[cami].fr)
+                                    if (goFR && Cam(cami).fr)
                                         frQueue.AddToQueue(new FRTask
                                         {
                                             ImagePaths = imagePaths,
@@ -192,7 +193,7 @@ namespace Lookout
                                             EventId = fe.after.id,
                                             OriginalCaption = tgcaption
                                         });
-                                    else if (goAI && settings.frigate.cameras[cami].ai)
+                                    else if (goAI && Cam(cami).ai)
                                         aiQueue.AddToQueue(new AITask
                                         {
                                             ImagePaths = imagePaths,
@@ -214,7 +215,7 @@ namespace Lookout
                             {
                                 if (x > 1) await Task.Delay(settings.telegram.sendchatstimepause * 1000);
                                 await TgCall(() => bot.SendVideo(
-                                    chatId: chid,
+                                    chatId: chid, disableNotification: NotifySilent,
                                     video: InputFile.FromStream(System.IO.File.OpenRead(parts[i - 1].path)),
                                     caption: cap,
                                     supportsStreaming: true,
@@ -247,7 +248,7 @@ namespace Lookout
 
                             if (x > 1) await Task.Delay(settings.telegram.sendchatstimepause * 1000);
                             await TgCall(() => bot.SendVideo(
-                                chatId: chid,
+                                chatId: chid, disableNotification: NotifySilent,
                                 video: InputFile.FromStream(System.IO.File.OpenRead(parts[i - 1].path)),
                                 caption: cap,
                                 supportsStreaming: true,
@@ -274,6 +275,7 @@ namespace Lookout
         async static Task FrigateEventEndWorker(FrigateEvent fe, int attempt = 0)
         {
             RetryQueue.BeginRun();
+            NotifyContext.Begin(settings.frigate.cameras.Find(c => c.camera == fe.after.camera), fe.after.id);
             try
             {
                 string camera = fe.after.camera;
@@ -291,7 +293,7 @@ namespace Lookout
 
                 List<IAlbumInputMedia> md = new List<IAlbumInputMedia>();
 
-                if (settings.frigate.cameras[cami].snapshot && settings.frigate.cameras[cami].snapshottrigger == "end")
+                if (Cam(cami).snapshot && Cam(cami).snapshottrigger == "end")
                 {
                     string snapPath = settings.frigate.clipspath + "/" + fe.after.camera + "-" + fe.after.id + ".jpg";
 
@@ -320,13 +322,13 @@ namespace Lookout
                             ParseMode = ParseMode.Markdown
                         });
 
-                        if ((md.Count > 0) && (!settings.frigate.cameras[cami].sctogether || !settings.frigate.cameras[cami].clip))
+                        if ((md.Count > 0) && (!Cam(cami).sctogether || !Cam(cami).clip))
                         {
                             firstmessage = true;
                             int x = 1;
                             foreach (var chid in settings.telegram.chatids)
                             {
-                                Message[] msgs = await TgCall(() => bot.SendMediaGroup(chatId: chid, media: md), "event", fe.after.id, camera);
+                                Message[] msgs = await TgCall(() => bot.SendMediaGroup(chatId: chid, media: md, disableNotification: NotifySilent), "event", fe.after.id, camera);
                                 await Task.Delay(100);
                                 firstmessages[chid] = msgs[0].MessageId;
                                 if (x > 1) await Task.Delay(settings.telegram.sendchatstimepause * 1000);
@@ -334,7 +336,7 @@ namespace Lookout
                                 Log("event", fe.after.id, camera, "The snapshot was sent to telegram chat " + chid);
                             }
 
-                            if (goFR && settings.frigate.cameras[cami].fr)
+                            if (goFR && Cam(cami).fr)
                                 foreach (var chid in settings.telegram.chatids)
                                     frQueue.AddToQueue(new FRTask
                                     {
@@ -346,7 +348,7 @@ namespace Lookout
                                         EventId = fe.after.id,
                                         OriginalCaption = tgcaption
                                     });
-                            else if (goAI && settings.frigate.cameras[cami].ai)
+                            else if (goAI && Cam(cami).ai)
                                 foreach (var chid in settings.telegram.chatids)
                                     aiQueue.AddToQueue(new AITask
                                     {
@@ -362,7 +364,7 @@ namespace Lookout
                     }
                 }
 
-                if (fe.after.has_clip && (settings.frigate.cameras[cami].clip || settings.frigate.cameras[cami].gif))
+                if (fe.after.has_clip && (Cam(cami).clip || Cam(cami).gif))
                 {
                     int secs = 0;
                     var sqlq = (sql: new Queries().getEventQuery("event", true), id: fe.after.id, camera: fe.after.camera);
@@ -381,7 +383,7 @@ namespace Lookout
                             Metrics.Observe(waitSw.Elapsed.TotalSeconds);
                             Log("event", fe.after.id, camera, "All recordings are ready");
 
-                            if (settings.frigate.cameras[cami].trueend)
+                            if (Cam(cami).trueend)
                             {
                                 var fes = new FrigateEvent { type = "trueend", before = fe.before, after = fe.after };
                                 Log("event", fe.after.id, camera, "Sending the trueend event");
@@ -429,7 +431,7 @@ namespace Lookout
                             {
                                 Log("event", fe.after.id, camera, "All recordings are ready");
 
-                                if (settings.frigate.cameras[cami].trueend)
+                                if (Cam(cami).trueend)
                                 {
                                     var fes = new FrigateEvent { type = "trueend", before = fe.before, after = fe.after };
                                     Log("event", fe.after.id, camera, "Sending the trueend event");

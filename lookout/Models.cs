@@ -74,6 +74,19 @@ namespace Lookout
     {
         public string user { get; set; }
         public string password { get; set; }
+        // Address of the web UI as seen from the phone, e.g. https://lookout.example.com (for "Open in Lookout" buttons).
+        public string publicurl { get; set; }
+    }
+
+    // Quiet hours: between `from` and `to` (local time, HH:mm; the interval may cross midnight) notifications change:
+    //   none     - nothing is sent
+    //   snapshot - only the snapshot, no clip or GIF
+    //   silent   - everything is sent, but without a sound (Telegram's disable_notification)
+    public class QuietSettings
+    {
+        public string from { get; set; }
+        public string to { get; set; }
+        public string mode { get; set; } = "silent";
     }
 
     public class Objects
@@ -98,7 +111,14 @@ namespace Lookout
         public List<Objects> objects { get; set; } = new List<Objects>();
         public List<string> severity { get; set; } = new List<string>() { "detection", "alert" };
         public List<string> zones { get; set; } = new List<string>();
+        // Minutes during which a camera that has just sent a notification stays quiet (0 = no cooldown).
+        public int cooldown { get; set; } = 0;
+        // Count the cooldown per object type: a person right after a car still gets through.
+        public bool cooldownperobject { get; set; } = false;
+        // Quiet hours of this camera; replaces options.quiet.
+        public QuietSettings quiet { get; set; }
 
+        internal Camera Clone() => (Camera)MemberwiseClone();
     }
 
     public class FrigateSettings
@@ -149,6 +169,10 @@ namespace Lookout
         // and the first delay in seconds, doubled for every next repeat.
         public int retrymax { get; set; } = 0;
         public int retrybackoff { get; set; } = 30;
+        // Quiet hours for every camera that has no `quiet` of its own.
+        public QuietSettings quiet { get; set; }
+        // Buttons under each notification: Clip, Open in Lookout (needs web.publicurl), Mute the camera for an hour.
+        public bool buttons { get; set; } = false;
         public LocaleSettings locale { get; set; } = new LocaleSettings();
     }
 

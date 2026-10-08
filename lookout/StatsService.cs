@@ -366,6 +366,23 @@ namespace Lookout
             return ReadEvents(cmd).FirstOrDefault();
         }
 
+        // Ids of the events (detections) a Frigate review consists of; empty if there is no such review.
+        public static List<string> GetReviewDetections(string reviewId)
+        {
+            try
+            {
+                using var db = Open();
+                using var cmd = new SqliteCommand("SELECT json_extract(data, '$.detections') FROM reviewsegment WHERE id = $id", db);
+                cmd.Parameters.AddWithValue("$id", reviewId);
+                var v = cmd.ExecuteScalar();
+                return v == null || v is DBNull ? new List<string>() : JsonConvert.DeserializeObject<List<string>>(v.ToString()) ?? new List<string>();
+            }
+            catch
+            {
+                return new List<string>();
+            }
+        }
+
         static List<EventRow> ReadEvents(SqliteCommand cmd)
         {
             var result = new List<EventRow>();

@@ -16,6 +16,7 @@ namespace Lookout
         static readonly Dictionary<string, string> help = new Dictionary<string, string>
         {
             ["lookout_events_total"] = "Frigate events and reviews that passed the filters and went to a worker.",
+            ["lookout_events_skipped_total"] = "Messages dropped because the camera is muted, in quiet hours or in its cooldown.",
             ["lookout_worker_errors_total"] = "Workers that ended with an error.",
             ["lookout_telegram_errors_total"] = "Failed Telegram API calls.",
             ["lookout_telegram_rate_limited_total"] = "Telegram calls that hit the 429 rate limit.",

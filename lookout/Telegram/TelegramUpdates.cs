@@ -63,6 +63,18 @@ namespace Lookout
                 await TgSendStat(botClient, message.Chat.Id, null, args, cancellationToken);
             }
 
+            if (command == "/mute")
+                await TgMute(botClient, message.Chat.Id, who, args, cancellationToken);
+
+            if (command == "/unmute")
+                await TgUnmute(botClient, message.Chat.Id, who, args, cancellationToken);
+
+            if (command == "/clip")
+            {
+                Log("tg", who, message.Chat.Id.ToString(), "Sending clip");
+                await TgSendClip(botClient, message.Chat.Id, args.FirstOrDefault(), cancellationToken);
+            }
+
             if (command == "/private" || command == "/help" || command == "/start")
             {
                 Log("tg", message.From.Id + (string.IsNullOrEmpty(message.From.Username) ? "" : " (@" + message.From.Username + ")"), message.Chat.Id.ToString(), "Sending help");
@@ -149,9 +161,14 @@ namespace Lookout
             try { await botClient.AnswerCallbackQuery(callback.Id, cancellationToken: cancellationToken); }
             catch (ApiRequestException) { }
 
-            // last|<camera or label>   stat|<period>|<camera>|<label>
+            // last|<camera or label>   stat|<period>|<camera>|<label>   clip|<event id>   mute|<camera>|<minutes>
             string[] parts = callback.Data.Split('|');
-            if (parts[0] == "last" && parts.Length == 2)
+            if (parts[0] == "clip" && parts.Length == 2)
+                await TgSendClip(botClient, chatId, parts[1], cancellationToken);
+            else if (parts[0] == "mute" && parts.Length == 3 && int.TryParse(parts[2], out int muteMinutes) && muteMinutes > 0
+                     && settings.frigate.cameras.Any(c => c.camera == parts[1]))
+                await TgMuteCameraAsync(botClient, chatId, who, parts[1], TimeSpan.FromMinutes(muteMinutes), cancellationToken);
+            else if (parts[0] == "last" && parts.Length == 2)
                 await TgSendLast(botClient, chatId, new[] { parts[1] }, cancellationToken);
             else if (parts[0] == "stat" && parts.Length == 4)
                 await TgSendStat(botClient, chatId, callback.Message.Id,

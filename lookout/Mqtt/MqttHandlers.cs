@@ -57,7 +57,8 @@ namespace Lookout
                         if ((settings.frigate.cameras[cami].zones.Count > 0) && (settings.frigate.cameras[cami].zones.Intersect(fe.after.entered_zones).Count() == 0))
                             return;
 
-                        if (EventPasses(settings.frigate.cameras[cami], fe.after))
+                        if (EventPasses(settings.frigate.cameras[cami], fe.after)
+                            && AllowDispatch(settings.frigate.cameras[cami], "event", fe.type, fe.after.id, new[] { fe.after.label }))
                         {
                             Log("event", fe.after.id, fe.after.camera, "Event end received");
                             Metrics.Inc("lookout_events_total", "source", "event", "type", "end");
@@ -75,7 +76,8 @@ namespace Lookout
                         if ((settings.frigate.cameras[cami].zones.Count > 0) && (settings.frigate.cameras[cami].zones.Intersect(fe.after.entered_zones).Count() == 0))
                             return;
 
-                        if (EventPasses(settings.frigate.cameras[cami], fe.after))
+                        if (EventPasses(settings.frigate.cameras[cami], fe.after)
+                            && AllowDispatch(settings.frigate.cameras[cami], "event", fe.type, fe.after.id, new[] { fe.after.label }))
                         {
                             Log("event", fe.after.id, fe.after.camera, "Event new received");
                             Metrics.Inc("lookout_events_total", "source", "event", "type", "new");
@@ -118,7 +120,8 @@ namespace Lookout
                             return;
 
 
-                        if (ReviewPasses(settings.frigate.cameras[cami], fr))
+                        if (ReviewPasses(settings.frigate.cameras[cami], fr)
+                            && AllowDispatch(settings.frigate.cameras[cami], "review", fr.type, fr.after.id, fr.after.data?.objects))
                         {
                             Log("review", fr.after.id, fr.after.camera, "Review end received");
                             Metrics.Inc("lookout_events_total", "source", "review", "type", "end");
@@ -138,7 +141,8 @@ namespace Lookout
                         if ((settings.frigate.cameras[cami].zones.Count > 0) && (settings.frigate.cameras[cami].zones.Intersect(fr.after.data.zones).Count() == 0))
                             return;
 
-                        if (ReviewPasses(settings.frigate.cameras[cami], fr))
+                        if (ReviewPasses(settings.frigate.cameras[cami], fr)
+                            && AllowDispatch(settings.frigate.cameras[cami], "review", fr.type, fr.after.id, fr.after.data?.objects))
                         {
                             Log("review", fr.after.id, fr.after.camera, "Review new/update received");
                             Metrics.Inc("lookout_events_total", "source", "review", "type", "new");

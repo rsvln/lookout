@@ -114,6 +114,9 @@ namespace Lookout
                         new BotCommand { Command = "status", Description = L10n.Tg.T("tg.cmd.status") },
                         new BotCommand { Command = "last", Description = L10n.Tg.T("tg.cmd.last") },
                         new BotCommand { Command = "stat", Description = L10n.Tg.T("tg.cmd.stat") },
+                        new BotCommand { Command = "clip", Description = L10n.Tg.T("tg.cmd.clip") },
+                        new BotCommand { Command = "mute", Description = L10n.Tg.T("tg.cmd.mute") },
+                        new BotCommand { Command = "unmute", Description = L10n.Tg.T("tg.cmd.unmute") },
                         new BotCommand { Command = "help", Description = L10n.Tg.T("tg.cmd.help") },
                     });
                 }
@@ -175,6 +178,7 @@ namespace Lookout
                     {
                         var result = await call();
                         RetryQueue.MarkSent();
+                        await TgAddActionsAsync(result);
                         await Task.Delay(50);
                         return result;
                     }

@@ -45,7 +45,7 @@ namespace Lookout.Tests
             db.Open();
             Exec(db, "CREATE TABLE event (id TEXT PRIMARY KEY, camera TEXT, label TEXT, sub_label TEXT, top_score REAL, data TEXT, " +
                      "false_positive INTEGER, start_time REAL, end_time REAL, zones TEXT, has_snapshot INTEGER, has_clip INTEGER)");
-            Exec(db, "CREATE TABLE reviewsegment (id TEXT PRIMARY KEY, camera TEXT, severity TEXT, start_time REAL)");
+            Exec(db, "CREATE TABLE reviewsegment (id TEXT PRIMARY KEY, camera TEXT, severity TEXT, start_time REAL, data TEXT)");
             Exec(db, "CREATE TABLE recordings (path TEXT, camera TEXT, start_time REAL, end_time REAL)");
             return path;
         }
@@ -68,11 +68,12 @@ namespace Lookout.Tests
             cmd.ExecuteNonQuery();
         }
 
-        public static void AddReview(string dbPath, string id, string camera, string severity, double startUnix)
+        public static void AddReview(string dbPath, string id, string camera, string severity, double startUnix, string data = null)
         {
             using var db = new SqliteConnection("Data Source = " + dbPath);
             db.Open();
-            using var cmd = new SqliteCommand("INSERT INTO reviewsegment (id, camera, severity, start_time) VALUES ($id, $camera, $sev, $start)", db);
+            using var cmd = new SqliteCommand("INSERT INTO reviewsegment (id, camera, severity, start_time, data) VALUES ($id, $camera, $sev, $start, $data)", db);
+            cmd.Parameters.AddWithValue("$data", (object)data ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$id", id);
             cmd.Parameters.AddWithValue("$camera", camera);
             cmd.Parameters.AddWithValue("$sev", severity);
