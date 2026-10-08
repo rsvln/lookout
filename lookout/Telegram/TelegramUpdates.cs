@@ -82,7 +82,7 @@ namespace Lookout
                 await TgCall(() => botClient.SendMessage(
                     chatId: message.Chat.Id,
                     text: helpText,
-                    parseMode: ParseMode.Markdown,
+                    parseMode: ParseMode.Html,
                     cancellationToken: cancellationToken),
                     "tg", "", message.Chat.Id.ToString());
             }

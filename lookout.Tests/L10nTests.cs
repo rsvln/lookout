@@ -11,7 +11,7 @@ namespace Lookout.Tests
         public void English_ReturnsStringsWithArguments()
         {
             Assert.Equal("24 h", L10n.Tg.T("period.hours", 24));
-            Assert.Equal("*Version:* 1.2.3", L10n.Tg.T("tg.help.version", "1.2.3"));
+            Assert.Equal("<b>Version:</b> 1.2.3", L10n.Tg.T("tg.help.version", "1.2.3"));
         }
 
         [Fact]
