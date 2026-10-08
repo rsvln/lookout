@@ -1,67 +1,12 @@
 using System.Globalization;
-using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.RepresentationModel;
 
 namespace Lookout
 {
-    // Secrets in the config YAML (passwords, tokens, API keys) are shown as ******** in the web UI and put back
-    // from the file on disk when the editor still has the mask. Values are replaced by source span so comments stay.
+    // YAML edits by path: values are replaced by source span so comments stay.
     public static class ConfigYaml
     {
-        public const string Mask = "********";
-
-        static readonly HashSet<string> SecretKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "password", "token", "apikey", "secret" };
-
-        public static bool IsSecretKey(string key) => key != null && SecretKeys.Contains(key);
-
-        public static bool IsSecretPath(string path)
-        {
-            if (string.IsNullOrEmpty(path)) return false;
-            int dot = path.LastIndexOf('.');
-            string last = dot < 0 ? path : path.Substring(dot + 1);
-            int bracket = last.IndexOf('[');
-            if (bracket >= 0) last = last.Substring(0, bracket);
-            return IsSecretKey(last);
-        }
-
-        public static string MaskSecrets(string yaml)
-        {
-            if (string.IsNullOrEmpty(yaml)) return yaml;
-            try
-            {
-                var spans = Collect(yaml).Where(s => IsSecretKey(LastKey(s.path)) && s.value != Mask && s.value != "").OrderByDescending(s => s.start).ToList();
-                var sb = new StringBuilder(yaml);
-                foreach (var s in spans)
-                    sb.Remove(s.start, s.end - s.start).Insert(s.start, FormatScalar(Mask));
-                return sb.ToString();
-            }
-            catch (YamlDotNet.Core.YamlException) { return yaml; }
-        }
-
-        // Submitted text from the editor: every secret that is still the mask is taken from `original` (the file).
-        public static string RestoreSecrets(string submitted, string original)
-        {
-            if (string.IsNullOrEmpty(submitted) || string.IsNullOrEmpty(original)) return submitted;
-            Dictionary<string, string> fromFile;
-            List<Span> inSubmit;
-            try
-            {
-                fromFile = Collect(original).Where(s => IsSecretKey(LastKey(s.path))).GroupBy(s => s.path).ToDictionary(g => g.Key, g => g.Last().value);
-                inSubmit = Collect(submitted).Where(s => IsSecretKey(LastKey(s.path)) && s.value == Mask).OrderByDescending(s => s.start).ToList();
-            }
-            catch (YamlDotNet.Core.YamlException) { return submitted; }
-
-            var sb = new StringBuilder(submitted);
-            foreach (var s in inSubmit)
-            {
-                if (!fromFile.TryGetValue(s.path, out string real) || real == Mask) continue;
-                sb.Remove(s.start, s.end - s.start).Insert(s.start, FormatScalar(real));
-            }
-            return sb.ToString();
-        }
-
         // Replace the scalar (or sequence, for a list of scalars) at `path`; if the last key is missing, it is added
         // under its parent. Path: "mqtt.password", "frigate.cameras[camera=front].cooldown", "telegram.chatids".
         public static readonly Regex CameraNameOk = new(@"^[A-Za-z0-9][A-Za-z0-9_.-]*$", RegexOptions.CultureInvariant);
@@ -93,7 +38,6 @@ namespace Lookout
             foreach (var kv in fields)
             {
                 if (kv.Value == null) continue;
-                if (IsSecretPath(kv.Key) && kv.Value == Mask) continue;
                 yaml = Set(yaml, kv.Key, kv.Value);
             }
             return yaml;
@@ -143,53 +87,11 @@ namespace Lookout
             return "\"" + v.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
         }
 
-        // ---- walking the tree ---------------------------------------------------------------------------------------
-
-        record Span(string path, int start, int end, string value);
-
         static YamlNode Root(string yaml)
         {
             var stream = new YamlStream();
             stream.Load(new StringReader(yaml));
             return stream.Documents.Count == 0 ? null : stream.Documents[0].RootNode;
-        }
-
-        static List<Span> Collect(string yaml)
-        {
-            var found = new List<Span>();
-            var root = Root(yaml);
-            if (root != null) Walk(root, "", found);
-            return found;
-        }
-
-        static void Walk(YamlNode node, string path, List<Span> found)
-        {
-            if (node is YamlMappingNode map)
-            {
-                foreach (var kv in map.Children)
-                {
-                    string key = kv.Key is YamlScalarNode ks ? ks.Value : "";
-                    string child = path == "" ? key : path + "." + key;
-                    Walk(kv.Value, child, found);
-                }
-            }
-            else if (node is YamlSequenceNode seq)
-            {
-                int i = 0;
-                foreach (var item in seq.Children)
-                    Walk(item, path + "." + i++, found);
-            }
-            else if (node is YamlScalarNode scalar)
-            {
-                int start = (int)scalar.Start.Index, end = (int)scalar.End.Index;
-                if (end > start) found.Add(new Span(path, start, end, scalar.Value ?? ""));
-            }
-        }
-
-        static string LastKey(string path)
-        {
-            int dot = path.LastIndexOf('.');
-            return dot < 0 ? path : path.Substring(dot + 1);
         }
 
         public static List<(string key, string selector)> ParsePath(string path)
@@ -461,16 +363,16 @@ namespace Lookout
                     F("frigate.clipspath", "text", f?.clipspath), F("frigate.dbpath", "text", f?.dbpath),
                     F("frigate.recordingspath", "text", f?.recordingspath), F("frigate.recordingsoriginalpath", "text", f?.recordingsoriginalpath)),
                 G("mqtt", F("mqtt.host", "text", m?.host), F("mqtt.port", "number", n(m?.port)),
-                    F("mqtt.user", "text", m?.user), F("mqtt.password", "password", Mask(m?.password)),
+                    F("mqtt.user", "text", m?.user), F("mqtt.password", "text", m?.password),
                     F("mqtt.eventstopic", "text", m?.eventstopic), F("mqtt.reviewstopic", "text", m?.reviewstopic)),
-                G("telegram", F("telegram.token", "password", Mask(tg?.token)),
+                G("telegram", F("telegram.token", "text", tg?.token),
                     F("telegram.chatids", "text", tg?.chatids == null ? "" : string.Join(", ", tg.chatids)),
                     F("telegram.clipsizecheck", "number", n(tg?.clipsizecheck)), F("telegram.clipsizesplit", "number", n(tg?.clipsizesplit)),
                     F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit))),
                 G("notifiers"),
-                G("web", F("web.user", "text", w?.user), F("web.password", "password", Mask(w?.password)),
+                G("web", F("web.user", "text", w?.user), F("web.password", "text", w?.password),
                     F("web.publicurl", "text", w?.publicurl), F("web.auth", "select", w?.auth ?? "basic", "basic", "form"),
-                    F("web.sessionhours", "number", n(w?.sessionhours ?? 168)), F("web.secret", "password", Mask(w?.secret))),
+                    F("web.sessionhours", "number", n(w?.sessionhours ?? 168)), F("web.secret", "text", w?.secret)),
                 G("options", F("options.timeoffset", "number", n(o?.timeoffset)), F("options.timeout", "number", n(o?.timeout)),
                     F("options.retry", "number", n(o?.retry)), F("options.retrymax", "number", n(o?.retrymax)),
                     F("options.retrybackoff", "number", n(o?.retrybackoff)), F("options.correlate", "number", n(o?.correlate)),
@@ -479,11 +381,11 @@ namespace Lookout
                     F("options.quiet.from", "text", o?.quiet?.from), F("options.quiet.to", "text", o?.quiet?.to),
                     F("options.quiet.mode", "select", o?.quiet?.mode ?? "silent", "silent", "snapshot", "none")),
                 G("ai", F("ai.provider", "select", string.IsNullOrEmpty(ai?.provider) ? "ollama" : ai.provider, "ollama", "openai", "gemini"),
-                    F("ai.url", "text", ai?.url), F("ai.model", "text", ai?.model), F("ai.apikey", "password", Mask(ai?.apikey)),
+                    F("ai.url", "text", ai?.url), F("ai.model", "text", ai?.model), F("ai.apikey", "text", ai?.apikey),
                     F("ai.humanprompt", "textarea", ai?.humanprompt), F("ai.nonhumanprompt", "textarea", ai?.nonhumanprompt),
                     F("ai.numpredict", "number", n(ai?.numpredict)), F("ai.temperature", "text", ai == null ? "" : ai.temperature.ToString(CultureInfo.InvariantCulture)),
                     F("ai.thinking", "checkbox", b(ai?.thinking ?? false)), F("ai.resizetowidth", "number", n(ai?.resizetowidth))),
-                G("fr", F("fr.url", "text", fr?.url), F("fr.apikey", "password", Mask(fr?.apikey)),
+                G("fr", F("fr.url", "text", fr?.url), F("fr.apikey", "text", fr?.apikey),
                     F("fr.confidence", "text", fr == null ? "" : fr.confidence.ToString(CultureInfo.InvariantCulture)),
                     F("fr.detprobthreshold", "text", fr == null ? "" : fr.detprobthreshold.ToString(CultureInfo.InvariantCulture))),
             };
@@ -514,7 +416,7 @@ namespace Lookout
                     break;
                 case "matrix":
                     list.Add(F($"{p}.homeserver", "text", s.homeserver));
-                    list.Add(F($"{p}.token", "password", Mask(s.token)));
+                    list.Add(F($"{p}.token", "text", s.token));
                     list.Add(F($"{p}.room", "text", s.room));
                     break;
                 case "telegram":
@@ -522,7 +424,7 @@ namespace Lookout
                     break;
                 default:
                     list.Add(F($"{p}.url", "text", s.url));
-                    list.Add(F($"{p}.token", "password", Mask(s.token)));
+                    list.Add(F($"{p}.token", "text", s.token));
                     list.Add(F($"{p}.title", "text", s.title));
                     list.Add(F($"{p}.attach", "checkbox", b(s.attach)));
                     break;
@@ -549,7 +451,6 @@ namespace Lookout
             };
         }
 
-        static string Mask(string v) => string.IsNullOrEmpty(v) ? "" : ConfigYaml.Mask;
         static string n(long? v) => v == null || v == 0 ? "0" : v.Value.ToString(CultureInfo.InvariantCulture);
         static string n(int? v) => v == null ? "" : v.Value.ToString(CultureInfo.InvariantCulture);
         static string b(bool v) => v ? "true" : "false";

@@ -626,8 +626,8 @@ function fieldInput(f) {
     return `<label>${esc(f.label)}<select data-path="${esc(f.path)}">${(f.options || []).map(o => `<option value="${esc(o)}"${o === f.value ? ' selected' : ''}>${esc(optionLabel(f, o))}</option>`).join('')}</select></label>`;
   if (f.type === 'textarea')
     return `<label>${esc(f.label)}<textarea data-path="${esc(f.path)}" rows="3">${esc(f.value)}</textarea></label>`;
-  const type = f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text';
-  return `<label>${esc(f.label)}<input type="${type}" data-path="${esc(f.path)}" value="${esc(f.value)}"${type === 'password' ? ' autocomplete="new-password"' : ''}></label>`;
+  const type = f.type === 'number' ? 'number' : 'text';
+  return `<label>${esc(f.label)}<input type="${type}" data-path="${esc(f.path)}" value="${esc(f.value)}"></label>`;
 }
 
 function optionLabel(f, o) {

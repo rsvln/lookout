@@ -1,6 +1,6 @@
 # Lookout
 
-A companion service for [Frigate NVR](https://frigate.video). Frigate's own clips can be cut short or out of sync when a stream lags; Lookout waits until the recording of an event or review is really complete ("true end"), builds the clip from the recording segments itself and delivers it to Telegram together with snapshots, an AI description and recognized faces. A web UI on top of Frigate's database shows what happened: live log, event galleries with video, statistics and the config editor.
+A companion service for [Frigate NVR](https://frigate.video). Frigate's own clips can be cut short or out of sync when a stream lags; Lookout waits until the recording of an event or review is really complete ("true end"), builds the clip from the recording segments itself and sends snapshots, the clip, an optional AI description and recognized faces — to Telegram and, if you add them, ntfy / Discord / Matrix / webhook. A web UI on port 8888 sits on Frigate's database: live log, event galleries with video, statistics, search and a config tree.
 
 Previously named **frte2tg**.
 
@@ -23,6 +23,7 @@ Previously named **frte2tg**.
 - `/last` — latest events of every camera or one camera, with buttons to switch camera and object
 - `/stat` — events by camera, object, hour and day for 24 h / today / 7 d / 30 d, with buttons to switch the period
 - `/clip`, `/mute`, `/unmute` — fetch a clip by event id, silence a camera for a while
+- Optional buttons under a notification: clip, open in Lookout, mute 1 h
 
 **Web UI** (port 8888)
 - Live log with filters, newest lines first
@@ -285,7 +286,7 @@ Available at `http://<host>:8888`. The Config tab shows the bot token and MQTT p
 - **Last** — latest N events of every camera (grouped by camera) or the history of one camera, as snapshot cards with object, score, time and zones. Click a snapshot to enlarge it. Every card has **▶ Video** (plays the clip in the page, with seeking) and **⬇** (downloads it); the clip is built from the camera's recording segments, so it works even when Frigate has no clip of its own, and for an event still in progress it covers the recording up to now. Cards load a snapshot from Frigate's clips folder, Lookout's `live/` cache, or Frigate's HTTP snapshot/thumbnail if the file is gone
 - **Stats** — events / alerts / detections for a period (24 h, today, 7 d, 30 d), cameras × objects matrix, activity by hour of day and by day. The object filter defaults to **Config** — only cameras and objects (with their `percent` thresholds) the bot is configured to send; **All** shows everything Frigate saw. Click a matrix cell to drill down; **← Back** returns to the previous view or to the overview
 - **Search** — events by camera, object, time, id, zone, recognized face or AI description (`lookout.db`)
-- **Config** — **Form** is a settings tree (Frigate, each camera, MQTT, Telegram, …). **+ Camera** / **Remove** add or drop cameras; the name must match Frigate's. **YAML** is the full file with highlighting, error underlining, line numbers, folding and search (Ctrl+F); Tab and pasted tabs become spaces. **Save** writes the file (with a `.bak` backup), **Apply** restarts the services with the saved file, **Save & apply** does both. A config with YAML errors or missing sections is not saved
+- **Config** — **Form** is a settings tree (Frigate, each camera, MQTT, Telegram, extra notifiers, AI, face recognition, …). **+ Camera** / **+ Channel** add cameras and extra notification channels even if they are not in the YAML yet; **Remove** drops them. **YAML** is the full file with highlighting, error underlining, line numbers, folding and search (Ctrl+F); Tab and pasted tabs become spaces. **Save** writes the file (with a `.bak` backup), **Apply** restarts the services with the saved file, **Save & apply** does both. A config with YAML errors or missing sections is not saved
 - **About** — version, build date, links and this manual with highlighted code
 
 Every view has its own address, with the filters in it, so it can be bookmarked or shared and the browser's Back / Forward work: `/log?camera=homecam02&type=review`, `/last?camera=homecam01&label=car`, `/stats?period=7d&label=person`, `/stats/events?period=24h&camera=homecam01&hour=8` (the events behind a stats cell or chart bar), `/search?q=person`, `/event/<id>` (one event; the time on every card links to it), `/config`, `/about`. Opening `/` shows the view seen last. The version and build date are shown in the footer of every page.

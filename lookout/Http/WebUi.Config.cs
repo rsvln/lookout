@@ -8,10 +8,10 @@ namespace Lookout
             {
                 if (!File.Exists(configPath))
                     return Results.NotFound();
-                return Results.Ok(new { content = ConfigYaml.MaskSecrets(File.ReadAllText(configPath)) });
+                return Results.Ok(new { content = File.ReadAllText(configPath) });
             });
 
-            // Structured form next to the YAML editor; secrets are the mask unless the field was changed.
+            // Structured form next to the YAML editor.
             app.MapGet("/api/settings", () => Safe(() =>
             {
                 if (!File.Exists(configPath))
@@ -39,15 +39,13 @@ namespace Lookout
             });
 
             // Saves the config (after checking that it parses); with "apply": true also applies it.
-            // Secrets still shown as the mask are taken from the file so a save cannot wipe them.
             app.MapPost("/api/config", async (HttpRequest req) =>
             {
                 using var reader = new StreamReader(req.Body);
                 var data = System.Text.Json.JsonSerializer.Deserialize<ConfigPayload>(await reader.ReadToEndAsync());
                 if (data?.content == null)
                     return Results.BadRequest();
-                string content = File.Exists(configPath) ? ConfigYaml.RestoreSecrets(data.content, File.ReadAllText(configPath)) : data.content;
-                return await SaveYaml(configPath, content, data.apply);
+                return await SaveYaml(configPath, data.content, data.apply);
             });
 
             app.MapPost("/api/apply", () => ApplyAsync(configPath));
