@@ -115,6 +115,7 @@
   "web.video": "Vídeo",
   "web.download": "Descargar clip",
   "web.video_error": "El clip no está disponible",
+  "web.no_recording": "No hay grabación de este evento en Frigate",
   "web.in_progress": "en curso",
   "web.just_now": "ahora mismo",
   "web.min_ago": "{0} min atrás",

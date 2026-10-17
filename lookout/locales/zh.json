@@ -115,6 +115,7 @@
   "web.video": "视频",
   "web.download": "下载片段",
   "web.video_error": "片段不可用",
+  "web.no_recording": "Frigate 中没有此事件的录像",
   "web.in_progress": "进行中",
   "web.just_now": "刚刚",
   "web.min_ago": "{0} 分钟前",

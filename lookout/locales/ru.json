@@ -124,6 +124,7 @@
   "web.video": "Видео",
   "web.download": "Скачать ролик",
   "web.video_error": "Ролик недоступен",
+  "web.no_recording": "У этого события нет записи во Frigate",
   "web.in_progress": "идёт",
   "web.just_now": "только что",
   "web.min_ago": "{0} мин назад",

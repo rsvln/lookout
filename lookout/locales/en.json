@@ -124,6 +124,7 @@
   "web.video": "Video",
   "web.download": "Download clip",
   "web.video_error": "Clip is not available",
+  "web.no_recording": "No recording of this event in Frigate",
   "web.in_progress": "in progress",
   "web.just_now": "just now",
   "web.min_ago": "{0} min ago",

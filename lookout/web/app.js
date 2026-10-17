@@ -152,7 +152,7 @@ async function render() {
   }
 }
 
-// One event: the snapshot at full width, its card with the video buttons below.
+// One event: its card at full width (the snapshot with the details and the video buttons below it).
 async function loadEvent(id) {
   const body = document.getElementById('event-body');
   body.innerHTML = '';
@@ -161,7 +161,6 @@ async function loadEvent(id) {
   const r = await res.json();
   document.title = 'Lookout · ' + r.camera + ' · ' + r.label + ' · ' + r.start_local;
   body.innerHTML = `<div class="event-view">
-      <img src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" onerror="this.remove()" alt="">
       ${eventCard(r)}
     </div>`;
 }
@@ -255,7 +254,7 @@ function eventCard(r) {
         ${r.ai_text ? `<div class="zones">${esc(r.ai_text)}</div>` : ''}
         <div class="actions">
           <button class="act" data-id="${esc(r.id)}" onclick="openVideo(this.dataset.id)">${ICON_PLAY} ${esc(t('web.video'))}</button>
-          <a class="act" href="/api/clip/${encodeURIComponent(r.id)}?download=1" title="${esc(t('web.download'))}">${ICON_DOWNLOAD}</a>
+          <button class="act" data-id="${esc(r.id)}" onclick="downloadClip(this)" title="${esc(t('web.download'))}">${ICON_DOWNLOAD}</button>
           <button class="act" data-id="${esc(r.id)}" onclick="shareClip(this.dataset.id)" title="${esc(t('web.share_clip'))}">${ICON_SHARE}</button>
         </div>
       </div>
@@ -335,6 +334,22 @@ async function loadSearch() {
   body.innerHTML = data.events.length
     ? `<div class="section"><h3>${esc(t('web.gallery.count', data.total))}${more}</h3><div class="cards">${data.events.map(eventCard).join('')}</div></div>`
     : `<div class="empty">${esc(t('web.search.empty'))}</div>`;
+}
+
+// The clip is built first (it may take a few seconds); with no recording in Frigate there is a message
+// instead of the browser's 404 page. The download itself then comes from the server's clip cache.
+async function downloadClip(btn) {
+  const id = encodeURIComponent(btn.dataset.id);
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/clip/' + id + '/check');
+    if (res.ok) location.href = '/api/clip/' + id + '?download=1';
+    else showToast(t(res.status === 404 ? 'web.no_recording' : 'web.video_error'), 'err');
+  } catch {
+    showToast(t('web.video_error'), 'err');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function shareClip(id) {
