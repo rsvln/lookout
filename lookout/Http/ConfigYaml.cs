@@ -23,6 +23,9 @@ namespace Lookout
                     var root = Root(yaml);
                     if (root == null) return yaml;
                     if (TryReplace(yaml, root, parts, 0, value, out string next)) return next;
+                    // An empty form field for a key the YAML doesn't have means "not set": nothing is added
+                    // (an added `numpredict: ""` would not even parse).
+                    if (string.IsNullOrEmpty(value)) return yaml;
                     if (!TryEnsureSelector(yaml, root, parts, out string ensured) || ensured == yaml)
                         return TryInsert(yaml, root, parts, 0, value) ?? yaml;
                     yaml = ensured;
@@ -38,7 +41,8 @@ namespace Lookout
             foreach (var kv in fields)
             {
                 if (kv.Value == null) continue;
-                yaml = Set(yaml, kv.Key, kv.Value);
+                try { yaml = Set(yaml, kv.Key, kv.Value); }
+                catch (Exception ex) { throw new InvalidOperationException(kv.Key + ": " + ex.Message, ex); }
             }
             return yaml;
         }
@@ -176,7 +180,9 @@ namespace Lookout
             if (map.Children.Count > 0)
             {
                 var last = map.Children.Last();
-                insertAt = Math.Max((int)last.Key.End.Index, NodeEnd(last.Value));
+                // SpanOf covers a flow sequence up to its closing bracket ("chatids: ['1']"); NodeEnd stops inside it.
+                int valueEnd = SpanOf(last.Value, yaml, out _, out int spanEnd) ? Math.Max(spanEnd, NodeEnd(last.Value)) : NodeEnd(last.Value);
+                insertAt = Math.Max((int)last.Key.End.Index, valueEnd);
                 indent = (int)last.Key.Start.Column - 1;
             }
             else
@@ -295,7 +301,9 @@ namespace Lookout
             if (map.Children.Count > 0)
             {
                 var last = map.Children.Last();
-                insertAt = Math.Max((int)last.Key.End.Index, NodeEnd(last.Value));
+                // SpanOf covers a flow sequence up to its closing bracket ("chatids: ['1']"); NodeEnd stops inside it.
+                int valueEnd = SpanOf(last.Value, yaml, out _, out int spanEnd) ? Math.Max(spanEnd, NodeEnd(last.Value)) : NodeEnd(last.Value);
+                insertAt = Math.Max((int)last.Key.End.Index, valueEnd);
                 indent = (int)last.Key.Start.Column - 1;
             }
             else

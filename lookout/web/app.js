@@ -982,6 +982,25 @@ function setBusy(text) {
   document.getElementById('busy').classList.toggle('show', !!text);
 }
 
+// Each step of saving / applying stays on screen long enough to be read, even when the server answers at once.
+async function busyStep(text, work) {
+  setBusy(text);
+  const [result] = await Promise.all([work(), new Promise(r => setTimeout(r, 600))]);
+  return result;
+}
+
+// What the last Save / Apply did and when, next to the buttons; stays until the next action.
+function setConfigStatus(text, type) {
+  const el = document.getElementById('config-status');
+  if (!el) return;
+  el.textContent = text ? (type === 'ok' ? '✓ ' : '✕ ') + text : '';
+  el.className = 'config-status' + (text ? ' ' + type : '');
+  void el.offsetWidth;
+  if (text) el.classList.add('flash');
+}
+
+const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
 // Sends a config request; returns true on success, shows the server's error otherwise.
 async function configRequest(url, body) {
   try {
@@ -989,8 +1008,10 @@ async function configRequest(url, body) {
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok) return true;
     showToast(t('web.config.invalid', data.error || res.status), 'err');
+    setConfigStatus(t('web.config.invalid', data.error || res.status), 'err');
   } catch (e) {
     showToast(t('web.config.invalid', e.message), 'err');
+    setConfigStatus(t('web.config.invalid', e.message), 'err');
   }
   return false;
 }
@@ -1000,7 +1021,7 @@ const PAGE_LOCALE = '%WEBLOCALE%';
 
 // After applying, waits until the service is back on MQTT (up to 20 s). If the web UI language changed,
 // reloads the page and shows the result there.
-async function waitForService() {
+async function waitForService(saved) {
   let st = {};
   for (let i = 0; i < 20 && !st.mqtt; i++) {
     if (i > 0) await new Promise(r => setTimeout(r, 1000));
@@ -1010,20 +1031,25 @@ async function waitForService() {
     } catch { }
   }
   const result = st.mqtt ? 'applied' : 'applied_nomqtt';
+  const status = t('web.config.status.' + (saved ? 'saved_applied' : 'applied'), nowTime())
+    + ' · ' + t(st.mqtt ? 'web.config.status.mqtt_ok' : 'web.config.status.mqtt_off');
   if (st.locale && st.locale !== PAGE_LOCALE) {
-    try { sessionStorage.setItem('lookout.toast', result); } catch { }
+    try { sessionStorage.setItem('lookout.toast', result); sessionStorage.setItem('lookout.status', JSON.stringify([status, st.mqtt ? 'ok' : 'err'])); } catch { }
     location.reload();
     return;
   }
   showToast(t('web.config.' + result), st.mqtt ? 'ok' : 'err');
+  setConfigStatus(status, st.mqtt ? 'ok' : 'err');
 }
 
 async function saveConfig(apply) {
-  setBusy(apply ? t('web.config.applying') : t('web.config.saving'));
+  setConfigStatus('');
   try {
-    const ok = configMode === 'form'
-      ? await configRequest('/api/settings', { fields: collectFields(), apply, removeCameras, removeNotifiers })
-      : await configRequest('/api/config', { content: (await getConfigEditor()).getValue(), apply });
+    const fields = configMode === 'form' ? collectFields() : null;
+    const content = configMode === 'form' ? null : (await getConfigEditor()).getValue();
+    const ok = await busyStep(apply ? t('web.config.applying') : t('web.config.saving'), () => configMode === 'form'
+      ? configRequest('/api/settings', { fields, apply, removeCameras: removedCameras, removeNotifiers: removedNotifiers })
+      : configRequest('/api/config', { content, apply }));
     if (!ok) return;
     if (configMode === 'form') {
       const fr = frigateNode();
@@ -1033,19 +1059,28 @@ async function saveConfig(apply) {
       (nn?.children || []).forEach((c, i) => { c.originalIndex = i; });
       removedNotifiers = [];
     }
-    if (apply) { setBusy(t('web.config.waiting')); await waitForService(); }
-    else showToast(t('web.config.saved'), 'ok');
+    if (apply) await busyStep(t('web.config.waiting'), () => waitForService(true));
+    else {
+      showToast(t('web.config.saved'), 'ok');
+      setConfigStatus(t('web.config.status.saved', nowTime()), 'ok');
+    }
+  } catch (e) {
+    // A failure in the page itself must not look like "nothing happened".
+    showToast(t('web.config.invalid', e.message), 'err');
+    setConfigStatus(t('web.config.invalid', e.message), 'err');
   } finally {
     setBusy(null);
   }
 }
 
 async function applyConfig() {
-  setBusy(t('web.config.applying'));
+  setConfigStatus('');
   try {
-    if (!await configRequest('/api/apply')) return;
-    setBusy(t('web.config.waiting'));
-    await waitForService();
+    if (!await busyStep(t('web.config.applying'), () => configRequest('/api/apply'))) return;
+    await busyStep(t('web.config.waiting'), () => waitForService(false));
+  } catch (e) {
+    showToast(t('web.config.invalid', e.message), 'err');
+    setConfigStatus(t('web.config.invalid', e.message), 'err');
   } finally {
     setBusy(null);
   }
@@ -1056,7 +1091,7 @@ function showToast(msg, type) {
   el.textContent = msg;
   el.className = 'toast ' + type + ' show';
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => el.classList.remove('show'), type === 'err' ? 6000 : 3000);
+  showToast.timer = setTimeout(() => el.classList.remove('show'), type === 'err' ? 8000 : 5000);
 }
 
 
@@ -1107,5 +1142,8 @@ try {
   if (pending) {
     sessionStorage.removeItem('lookout.toast');
     showToast(t('web.config.' + pending), pending === 'applied' ? 'ok' : 'err');
+    const status = JSON.parse(sessionStorage.getItem('lookout.status') || 'null');
+    sessionStorage.removeItem('lookout.status');
+    if (status) setConfigStatus(status[0], status[1]);
   }
 } catch { }

@@ -186,6 +186,12 @@
   }
 
   .config-hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+  /* Result of the last Save / Apply, stays until the next one. */
+  .config-status { font-size: 13px; margin-left: 8px; }
+  .config-status.ok { color: var(--green); }
+  .config-status.err { color: var(--red); }
+  .config-status.flash { animation: status-flash 1.2s ease-out; }
+  @keyframes status-flash { from { background: rgba(63, 185, 80, .25); } to { background: transparent; } }
 
   #config-editor-host { flex: 1; min-height: 0; overflow: hidden; }
 
@@ -435,6 +441,7 @@
     transform: translateY(8px);
     transition: all 0.2s;
     pointer-events: none;
+    z-index: 30;
   }
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.ok { background: var(--green); color: #000; }

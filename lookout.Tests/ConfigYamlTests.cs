@@ -53,6 +53,21 @@ namespace Lookout.Tests
         }
 
         [Fact]
+        public void Set_InsertsAfterAFlowSequence_NotInsideIt()
+        {
+            string yaml = "telegram:\n  token: x\n  chatids: ['-1']\noptions:\n  timeoffset: 0\n";
+            string next = ConfigYaml.Apply(yaml, new Dictionary<string, string>
+            {
+                ["telegram.clipsizecheck"] = "100",
+                ["telegram.links.enabled"] = "true",
+            });
+            var s = WebUi.ParseSettings(next + "frigate:\n  host: h\nmqtt:\n  host: h\nlogger:\n  file: false\n");
+            Assert.Equal(100, s.telegram.clipsizecheck);
+            Assert.True(s.telegram.links.enabled);
+            Assert.Equal(new List<string> { "-1" }, s.telegram.chatids);
+        }
+
+        [Fact]
         public void Set_ReplacesAScalarSequence()
         {
             string next = ConfigYaml.Set(Sample, "telegram.chatids", "-1, -2");

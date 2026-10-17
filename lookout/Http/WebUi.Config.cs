@@ -28,13 +28,22 @@ namespace Lookout
                 if (!File.Exists(configPath))
                     return Results.NotFound();
                 string yaml = File.ReadAllText(configPath);
-                if (data.removeCameras != null)
-                    foreach (var name in data.removeCameras.Where(n => n != null && ConfigYaml.CameraNameOk.IsMatch(n)))
-                        yaml = ConfigYaml.Remove(yaml, "frigate.cameras[camera=" + name + "]");
-                if (data.removeNotifiers != null)
-                    foreach (var i in data.removeNotifiers.Where(x => x >= 0 && x < 64).Distinct().OrderByDescending(x => x))
-                        yaml = ConfigYaml.Remove(yaml, "notifiers[" + i + "]");
-                yaml = ConfigYaml.Apply(yaml, data.fields);
+                try
+                {
+                    if (data.removeCameras != null)
+                        foreach (var name in data.removeCameras.Where(n => n != null && ConfigYaml.CameraNameOk.IsMatch(n)))
+                            yaml = ConfigYaml.Remove(yaml, "frigate.cameras[camera=" + name + "]");
+                    if (data.removeNotifiers != null)
+                        foreach (var i in data.removeNotifiers.Where(x => x >= 0 && x < 64).Distinct().OrderByDescending(x => x))
+                            yaml = ConfigYaml.Remove(yaml, "notifiers[" + i + "]");
+                    yaml = ConfigYaml.Apply(yaml, data.fields);
+                }
+                catch (Exception ex)
+                {
+                    // Nothing is written; the page shows which field could not be put into the YAML.
+                    Program.Log("app", "", "", "Settings were not saved: " + ex.Message);
+                    return Results.BadRequest(new { ok = false, error = ex.Message });
+                }
                 return await SaveYaml(configPath, yaml, data.apply);
             });
 
