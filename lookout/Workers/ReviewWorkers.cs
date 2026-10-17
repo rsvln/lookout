@@ -63,8 +63,8 @@ namespace Lookout
                         md.Add(new InputMediaPhoto(
                             new InputFileStream(System.IO.File.OpenRead(snaps[ev]), fr.after.camera + "-" + ev + ".jpg"))
                         {
-                            Caption = (i == 1) ? tgcaption : null,
-                            ParseMode = ParseMode.Markdown
+                            Caption = (i == 1) ? TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections) : null,
+                            ParseMode = ParseMode.Html
                         });
                         if (i == 9) break;
                         i++;
@@ -93,7 +93,7 @@ namespace Lookout
                                     MessageId = firstmessageid,
                                     Camera = camera,
                                     EventId = fr.after.id,
-                                    OriginalCaption = tgcaption
+                                    OriginalCaption = TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections)
                                 });
                             else if (goAI && Cam(cami).ai)
                                 aiQueue.AddToQueue(new AITask
@@ -104,7 +104,7 @@ namespace Lookout
                                     MessageId = firstmessageid,
                                     Camera = camera,
                                     EventId = fr.after.id,
-                                    OriginalCaption = tgcaption
+                                    OriginalCaption = TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections)
                                 });
                         }
                     }
@@ -161,7 +161,8 @@ namespace Lookout
                             await TgCall(() => bot.SendAnimation(
                                 chatId: chid, disableNotification: NotifySilent,
                                 animation: InputFile.FromStream(System.IO.File.OpenRead(gifPath), Path.GetFileName(gifPath)),
-                                caption: tgcaption,
+                                caption: TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections),
+                                parseMode: ParseMode.Html,
                                 replyParameters: (firstmessages[chid] != -1) ? new ReplyParameters { MessageId = firstmessages[chid] } : null),
                                 "review", fr.after.id, camera);
                             await Task.Delay(100);
@@ -212,7 +213,7 @@ namespace Lookout
                                             MessageId = firstmessages[chid],
                                             Camera = camera,
                                             EventId = fr.after.id,
-                                            OriginalCaption = tgcaption
+                                            OriginalCaption = TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections)
                                         });
                                     else if (goAI && Cam(cami).ai)
                                         aiQueue.AddToQueue(new AITask
@@ -223,7 +224,7 @@ namespace Lookout
                                             MessageId = firstmessages[chid],
                                             Camera = camera,
                                             EventId = fr.after.id,
-                                            OriginalCaption = tgcaption
+                                            OriginalCaption = TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections)
                                         });
                                 }
                             }
@@ -237,9 +238,9 @@ namespace Lookout
                                 await TgCall(() => bot.SendVideo(
                                     chatId: chid, disableNotification: NotifySilent,
                                     video: InputFile.FromStream(System.IO.File.OpenRead(parts[i - 1].path)),
-                                    caption: cap,
+                                    caption: TelegramLinks.Review(cap, fr.after.id, fr.after.data.detections),
                                     supportsStreaming: true,
-                                    parseMode: ParseMode.Markdown,
+                                    parseMode: ParseMode.Html,
                                     replyParameters: (firstmessages[chid] != -1) ? new ReplyParameters { MessageId = firstmessages[chid] } : null),
                                     "review", fr.after.id, camera);
                                 await Task.Delay(100);
@@ -272,9 +273,9 @@ namespace Lookout
                             await TgCall(() => bot.SendVideo(
                                 chatId: chid, disableNotification: NotifySilent,
                                 video: InputFile.FromStream(System.IO.File.OpenRead(parts[i - 1].path)),
-                                caption: cap,
+                                caption: TelegramLinks.Review(cap, fr.after.id, fr.after.data.detections),
                                 supportsStreaming: true,
-                                parseMode: ParseMode.Markdown,
+                                parseMode: ParseMode.Html,
                                 replyParameters: (firstmessages[chid] != -1) ? new ReplyParameters { MessageId = firstmessages[chid] } : null),
                                 "review", fr.after.id, camera);
                             await Task.Delay(100);
@@ -344,8 +345,8 @@ namespace Lookout
                         md.Add(new InputMediaPhoto(
                             new InputFileStream(System.IO.File.OpenRead(snapPath), fr.after.camera + "-" + ev + ".jpg"))
                         {
-                            Caption = (i == 1) ? tgcaption : null,
-                            ParseMode = ParseMode.Markdown
+                            Caption = (i == 1) ? TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections) : null,
+                            ParseMode = ParseMode.Html
                         });
                         if (i == settings.telegram.mediagrouplimit - 1) break;
                         i++;
@@ -374,7 +375,7 @@ namespace Lookout
                                     MessageId = firstmessages[chid],
                                     Camera = camera,
                                     EventId = fr.after.id,
-                                    OriginalCaption = tgcaption
+                                    OriginalCaption = TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections)
                                 });
                         else if (goAI && Cam(cami).ai)
                             foreach (var chid in settings.telegram.chatids)
@@ -386,7 +387,7 @@ namespace Lookout
                                     MessageId = firstmessages[chid],
                                     Camera = camera,
                                     EventId = fr.after.id,
-                                    OriginalCaption = tgcaption
+                                    OriginalCaption = TelegramLinks.Review(tgcaption, fr.after.id, fr.after.data.detections)
                                 });
                     }
                 }

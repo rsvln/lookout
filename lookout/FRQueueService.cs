@@ -222,7 +222,8 @@ namespace Lookout
                 await tgBotClient.EditMessageCaption(
                     chatId: task.ChatId,
                     messageId: task.MessageId,
-                    caption: task.OriginalCaption + "\n\n" + text);
+                    caption: TelegramLinks.Append(task.OriginalCaption, text),
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
                 Program.Log("fr", task.EventId, task.Camera, $"Telegram message updated: {task.ChatId}/{task.MessageId}");
             }
             catch (Exception ex)

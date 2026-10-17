@@ -158,10 +158,18 @@ namespace Lookout
 
         static string TryInsert(string yaml, YamlNode node, List<(string key, string selector)> parts, int i, string value)
         {
-            var parentParts = parts.Take(parts.Count - 1).ToList();
-            YamlNode parentNode = parentParts.Count == 0 ? node : Navigate(node, parentParts, 0, out _, out _);
+            // The deepest existing mapping on the path; the missing keys below it (e.g. "links" of telegram.links.url)
+            // are added as nested blocks.
+            int depth = parts.Count - 1;
+            YamlNode parentNode = depth == 0 ? node : Navigate(node, parts.Take(depth).ToList(), 0, out _, out _);
+            while (parentNode == null && depth > 0)
+            {
+                depth--;
+                if (parts[depth].selector != null) return null;
+                parentNode = depth == 0 ? node : Navigate(node, parts.Take(depth).ToList(), 0, out _, out _);
+            }
             if (parentNode is not YamlMappingNode map) return null;
-            string key = parts[parts.Count - 1].key;
+            string key = parts[depth].key;
             if (map.Children.Keys.OfType<YamlScalarNode>().Any(k => k.Value == key)) return null;
             string nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
             int insertAt, indent;
@@ -177,10 +185,16 @@ namespace Lookout
                 indent = Math.Max(0, (int)map.Start.Column + 1);
             }
             if (insertAt < 0 || insertAt > yaml.Length) return null;
-            string formatted = string.Equals(key, "chatids", StringComparison.OrdinalIgnoreCase)
+            string leaf = parts[parts.Count - 1].key;
+            string formatted = string.Equals(leaf, "chatids", StringComparison.OrdinalIgnoreCase)
                 ? FormatSequence(value)
                 : FormatScalar(value);
-            string line = nl + new string(' ', Math.Max(0, indent)) + key + ": " + formatted;
+            var line = new System.Text.StringBuilder();
+            for (int d = depth; d < parts.Count; d++)
+            {
+                line.Append(nl).Append(' ', Math.Max(0, indent + 2 * (d - depth))).Append(parts[d].key).Append(':');
+                if (d == parts.Count - 1) line.Append(' ').Append(formatted);
+            }
             return yaml.Substring(0, insertAt) + line + yaml.Substring(insertAt);
         }
 
@@ -368,7 +382,10 @@ namespace Lookout
                 G("telegram", F("telegram.token", "text", tg?.token),
                     F("telegram.chatids", "text", tg?.chatids == null ? "" : string.Join(", ", tg.chatids)),
                     F("telegram.clipsizecheck", "number", n(tg?.clipsizecheck)), F("telegram.clipsizesplit", "number", n(tg?.clipsizesplit)),
-                    F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit))),
+                    F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit)),
+                    F("telegram.links.enabled", "checkbox", b(tg?.links?.enabled ?? false)),
+                    F("telegram.links.target", "select", string.IsNullOrEmpty(tg?.links?.target) ? "frigate" : tg.links.target, "frigate", "lookout"),
+                    F("telegram.links.url", "text", tg?.links?.url)),
                 G("notifiers"),
                 G("web", F("web.user", "text", w?.user), F("web.password", "text", w?.password),
                     F("web.publicurl", "text", w?.publicurl), F("web.auth", "select", w?.auth ?? "basic", "basic", "form"),
@@ -462,6 +479,8 @@ namespace Lookout
                 string nk = "web.field.notifier." + (dot < 0 ? path : path.Substring(dot + 1));
                 if (L10n.Web.Has(nk)) return L10n.Web.T(nk);
             }
+            // A label for the whole path wins over the one for its last part (e.g. telegram.links.enabled vs enabled).
+            if (path != null && L10n.Web.Has("web.field." + path)) return L10n.Web.T("web.field." + path);
             string key = "web.field." + path.Replace("frigate.cameras[camera=", "camera.").Replace("]", "");
             int cut = key.IndexOf("camera.");
             if (cut >= 0) key = "web.field." + key.Substring(key.LastIndexOf('.') + 1);

@@ -222,14 +222,13 @@ namespace Lookout
         {
             try
             {
-                var caption = task.OriginalCaption + "\n\n" + description;
-                if (caption.Length > 1024)
-                    caption = caption.Substring(0, 1021) + "...";
+                var caption = TelegramLinks.Append(task.OriginalCaption, description);
 
                 await tgBotClient.EditMessageCaption(
                     chatId: task.ChatId,
                     messageId: task.MessageId,
-                    caption: caption
+                    caption: caption,
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Html
                 );
 
                 Program.Log("ai", task.EventId, task.Camera, $"Telegram message updated: {task.ChatId}/{task.MessageId}");

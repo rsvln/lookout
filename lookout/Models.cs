@@ -181,6 +181,17 @@ namespace Lookout
         public int sendchatstimepause { get; set; } = 30;
         public int retryonratelimit { get; set; } = 30;
         public string apiserver { get; set; } = "https://api.telegram.org/";
+        public TelegramLinkSettings links { get; set; } = new TelegramLinkSettings();
+    }
+
+    // Review / event ids in Telegram captions as links (off by default).
+    //   target: frigate -> Frigate's review / explore pages, lookout -> Lookout's search / event pages.
+    //   url: root address; empty = http://<frigate.host>:<frigate.port> for frigate, web.publicurl for lookout.
+    public class TelegramLinkSettings
+    {
+        public bool enabled { get; set; }
+        public string target { get; set; } = "frigate";
+        public string url { get; set; } = "";
     }
     /*
     public class ffmpegSettings

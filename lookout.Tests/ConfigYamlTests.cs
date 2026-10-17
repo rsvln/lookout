@@ -35,6 +35,24 @@ namespace Lookout.Tests
         }
 
         [Fact]
+        public void Apply_TelegramLinks_CreatesTheNestedBlock()
+        {
+            string next = ConfigYaml.Apply(Sample, new Dictionary<string, string>
+            {
+                ["telegram.links.enabled"] = "true",
+                ["telegram.links.target"] = "lookout",
+                ["telegram.links.url"] = "http://lab3:8888",
+            });
+            var s = new YamlDotNet.Serialization.DeserializerBuilder()
+                .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
+                .IgnoreUnmatchedProperties().Build().Deserialize<SettingsFile>(next);
+            Assert.True(s.telegram.links.enabled);
+            Assert.Equal("lookout", s.telegram.links.target);
+            Assert.Equal("http://lab3:8888", s.telegram.links.url);
+            Assert.Equal("abc:def", s.telegram.token);
+        }
+
+        [Fact]
         public void Set_ReplacesAScalarSequence()
         {
             string next = ConfigYaml.Set(Sample, "telegram.chatids", "-1, -2");

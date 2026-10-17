@@ -132,6 +132,10 @@ telegram:
   sendchatstimepause: 30       # seconds between chats when multiple
   retryonratelimit: 30         # seconds to wait on Telegram 429 rate limit (fallback if Retry-After not provided)
   apiserver: http://192.168.1.10:8081/  # local bot API server, leave empty for cloud
+  links:                       # review / event ids in captions as links (optional)
+    enabled: false
+    target: frigate            # frigate: Frigate's review / explore pages; lookout: Lookout's search / event pages
+    url:                       # root address; empty = http://<frigate.host>:<frigate.port> for frigate, web.publicurl for lookout
 
 options:
   timeoffset: 0                # minutes to add to UTC for display
