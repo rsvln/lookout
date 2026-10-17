@@ -135,7 +135,9 @@ telegram:
   links:                       # review / event ids in captions as links (optional)
     enabled: false
     target: frigate            # frigate: Frigate's review / explore pages; lookout: Lookout's search / event pages
-    url:                       # root address; empty = http://<frigate.host>:<frigate.port> for frigate, web.publicurl for lookout
+    frigateurl: https://nvr.example.org      # public address of Frigate as opened from Telegram
+    lookouturl: https://lookout.example.org  # public address of Lookout
+    # Links work only with enabled: true and the address of the chosen target set
 
 options:
   timeoffset: 0                # minutes to add to UTC for display

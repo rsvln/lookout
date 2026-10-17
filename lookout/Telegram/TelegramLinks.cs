@@ -8,31 +8,28 @@ namespace Lookout
     internal static class TelegramLinks
     {
         const int CaptionLimit = 1024;
-        static int lookoutUrlWarned;
+        static int missingUrlWarned;
 
-        // Root address of the link target, or null when links are off (or a Lookout target has no address).
+        // Root address of the link target, or null when links are off. Both are required: enabled: true and the
+        // address of the chosen target (frigateurl or lookouturl); internal addresses are never used instead.
         internal static string BaseUrl()
         {
             var links = Program.settings?.telegram?.links;
             if (links == null || !links.enabled)
                 return null;
-            bool lookout = string.Equals(links.target, "lookout", StringComparison.OrdinalIgnoreCase);
-            string url = links.url?.Trim();
-            if (string.IsNullOrEmpty(url) && lookout)
-                url = Program.settings.web?.publicurl?.Trim();
+            string key = ToLookout() ? "lookouturl" : "frigateurl";
+            string url = (ToLookout() ? links.lookouturl : links.frigateurl)?.Trim();
             if (string.IsNullOrEmpty(url))
             {
-                if (lookout)
-                {
-                    if (Interlocked.Exchange(ref lookoutUrlWarned, 1) == 0)
-                        Program.Log("app", "", "", "telegram.links: target lookout needs telegram.links.url or web.publicurl (Lookout's address), links are off");
-                    return null;
-                }
-                var f = Program.settings.frigate;
-                url = "http://" + f.host + ":" + f.port;
+                if (Interlocked.Exchange(ref missingUrlWarned, 1) == 0)
+                    Program.Log("app", "", "", "telegram.links is enabled but telegram.links." + key + " is empty, captions are sent without links");
+                return null;
             }
             return url.TrimEnd('/');
         }
+
+        // Settings were applied again: warn anew if the address is still missing.
+        internal static void Reset() => Interlocked.Exchange(ref missingUrlWarned, 0);
 
         static bool ToLookout() =>
             string.Equals(Program.settings?.telegram?.links?.target, "lookout", StringComparison.OrdinalIgnoreCase);

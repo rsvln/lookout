@@ -186,12 +186,14 @@ namespace Lookout
 
     // Review / event ids in Telegram captions as links (off by default).
     //   target: frigate -> Frigate's review / explore pages, lookout -> Lookout's search / event pages.
-    //   url: root address; empty = http://<frigate.host>:<frigate.port> for frigate, web.publicurl for lookout.
+    //   frigateurl / lookouturl: public root addresses as opened from Telegram (e.g. https://nvr.example.org).
+    // Links are on only with enabled: true and the address of the chosen target set; nothing is guessed.
     public class TelegramLinkSettings
     {
         public bool enabled { get; set; }
         public string target { get; set; } = "frigate";
-        public string url { get; set; } = "";
+        public string frigateurl { get; set; } = "";
+        public string lookouturl { get; set; } = "";
     }
     /*
     public class ffmpegSettings

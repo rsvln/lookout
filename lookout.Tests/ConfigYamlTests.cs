@@ -41,14 +41,14 @@ namespace Lookout.Tests
             {
                 ["telegram.links.enabled"] = "true",
                 ["telegram.links.target"] = "lookout",
-                ["telegram.links.url"] = "http://lab3:8888",
+                ["telegram.links.lookouturl"] = "https://nvr.example.org",
             });
             var s = new YamlDotNet.Serialization.DeserializerBuilder()
                 .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
                 .IgnoreUnmatchedProperties().Build().Deserialize<SettingsFile>(next);
             Assert.True(s.telegram.links.enabled);
             Assert.Equal("lookout", s.telegram.links.target);
-            Assert.Equal("http://lab3:8888", s.telegram.links.url);
+            Assert.Equal("https://nvr.example.org", s.telegram.links.lookouturl);
             Assert.Equal("abc:def", s.telegram.token);
         }
 

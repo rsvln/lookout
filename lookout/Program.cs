@@ -68,6 +68,7 @@ namespace Lookout
         {
             var loc = settings.options?.locale ?? new LocaleSettings();
             L10n.Load(loc.web, loc.telegram, loc.ai);
+            TelegramLinks.Reset();
             Log("app", "", "", "Languages: web " + L10n.Web.Locale + ", telegram " + L10n.Tg.Locale + ", ai " + L10n.Ai.Locale);
 
             RegisterRetryHandlers();
