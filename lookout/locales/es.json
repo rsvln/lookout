@@ -159,6 +159,7 @@
   "web.config.group.ai": "IA",
   "web.config.group.fr": "Reconocimiento facial",
   "web.config.group.quiet": "Horas de silencio",
+  "web.config.group.links": "Enlaces",
   "web.config.group.notifiers": "Notificadores",
   "web.config.add_camera": "+ Cámara",
   "web.config.remove_camera": "Quitar",

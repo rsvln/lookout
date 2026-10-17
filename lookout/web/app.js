@@ -730,15 +730,51 @@ function renderTreePanes(nodes) {
         : '';
       const grid = cam ? 'settings-grid cams' : 'settings-grid';
       html += `<div class="tree-pane" data-pane="${esc(n.id)}"><div class="tree-pane-head"><h3>${esc(n.title)}</h3>${del}</div>${hint}`
-        + (n.fields && n.fields.length
-          ? `<div class="${grid}">${n.fields.map(fieldInput).join('')}</div>`
-          : '')
+        + paneFields(n.fields || [], grid)
         + `</div>`;
       if (n.children) walk(n.children);
     }
   })(nodes);
   return html;
 }
+
+// Fields of a pane as a tree by their YAML path: the pane's own keys first, then every nested block
+// (e.g. telegram.links.*) indented under its title. A block's "enabled" checkbox comes first and, while off,
+// greys out the rest of the block (values are kept and saved).
+function paneFields(fields, grid) {
+  if (!fields.length) return '';
+  const parentOf = p => p.slice(0, p.lastIndexOf('.'));
+  const base = fields.map(f => parentOf(f.path)).reduce((a, b) => (b.length < a.length ? b : a));
+  const direct = fields.filter(f => parentOf(f.path) === base);
+  const blocks = new Map();
+  for (const f of fields) {
+    const p = parentOf(f.path);
+    if (p !== base) (blocks.get(p) || blocks.set(p, []).get(p)).push(f);
+  }
+  let html = direct.length ? `<div class="${grid}">${direct.map(fieldInput).join('')}</div>` : '';
+  for (const [path, list] of blocks) {
+    const key = path.slice(path.lastIndexOf('.') + 1);
+    const title = I18N['web.config.group.' + key] ? t('web.config.group.' + key) : key;
+    const master = list.find(f => f.type === 'checkbox' && f.path.endsWith('.enabled'));
+    const rest = list.filter(f => f !== master);
+    const off = master && master.value !== 'true';
+    html += `<div class="sub-block${off ? ' off' : ''}"><div class="sub-title">${esc(title)}</div>`
+      + `<div class="${grid}">${master ? fieldInput(master).replace('<label class="chk">', '<label class="chk sub-master">') : ''}`
+      + rest.map(f => off ? fieldInput(f).replace(' data-path=', ' disabled data-path=') : fieldInput(f)).join('')
+      + `</div></div>`;
+  }
+  return html;
+}
+
+// The master checkbox of a block enables or greys out the other fields of that block.
+document.addEventListener('change', e => {
+  const master = e.target.closest('.sub-master');
+  if (!master) return;
+  const block = master.closest('.sub-block');
+  const on = e.target.checked;
+  block.classList.toggle('off', !on);
+  block.querySelectorAll('[data-path]').forEach(el => { if (el !== e.target) el.disabled = !on; });
+});
 
 function captureFields() {
   document.querySelectorAll('#config-form [data-path]').forEach(el => {

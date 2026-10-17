@@ -280,6 +280,11 @@
     padding: 6px 8px; border-radius: 6px; font-size: 13px; font-family: inherit;
   }
   .settings-grid .chk { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+  /* Nested YAML blocks (e.g. telegram.links): indented under a title, with a line on the left. */
+  .sub-block { margin: 22px 0 0 14px; padding-left: 14px; border-left: 2px solid var(--border); }
+  .sub-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 10px; }
+  .sub-block .sub-master { grid-column: 1 / -1; }
+  .sub-block.off label:not(.sub-master) { opacity: .45; }
   @media (max-width: 720px) {
     .settings-tree { flex-direction: column; }
     .tree-nav { width: 100%; max-height: 160px; border-right: 0; border-bottom: 1px solid var(--border); }

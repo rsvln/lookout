@@ -168,6 +168,7 @@
   "web.config.group.ai": "ИИ",
   "web.config.group.fr": "Распознавание лиц",
   "web.config.group.quiet": "Тихие часы",
+  "web.config.group.links": "Ссылки",
   "web.config.group.notifiers": "Каналы",
   "web.config.add_camera": "+ Камера",
   "web.config.remove_camera": "Удалить",
