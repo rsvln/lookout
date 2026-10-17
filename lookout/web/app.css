@@ -258,7 +258,7 @@
   .tree-item:hover { background: var(--bg3); }
   .tree-item.on { background: var(--bg3); color: var(--accent); }
   .tree-main { flex: 1; min-width: 0; overflow: auto; padding: 16px 20px; }
-  .tree-pane { display: none; max-width: 760px; }
+  .tree-pane { display: none; max-width: 920px; }
   .tree-pane.on { display: block; }
   .tree-pane-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .tree-pane-head h3 { font-size: 15px; font-weight: 500; margin: 0; }
@@ -290,8 +290,15 @@
   .sub-block { margin: 22px 0 0 14px; padding-left: 14px; border-left: 2px solid var(--border); }
   .sub-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 10px; }
   .tree-pane-head + .sub-block, .tree-hint + .sub-block { margin-top: 4px; }
-  .sub-block .sub-master { grid-column: 1 / -1; }
-  .sub-block.off label:not(.sub-master) { opacity: .45; }
+  /* Rows of a form template: 4 columns, a field spans field.width of them. */
+  .settings-grid.form-row { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px; }
+  .form-cell { grid-column: span var(--w, 1); display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
+  .form-cell.off label { opacity: .45; }
+  .field-hint { color: var(--muted); font-size: 11px; }
+  @media (max-width: 720px) {
+    .settings-grid.form-row { grid-template-columns: 1fr; }
+    .form-cell { grid-column: auto; }
+  }
   @media (max-width: 720px) {
     .settings-tree { flex-direction: column; }
     .tree-nav { width: 100%; max-height: 160px; border-right: 0; border-bottom: 1px solid var(--border); }

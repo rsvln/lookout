@@ -47,6 +47,31 @@ namespace Lookout
             return yaml;
         }
 
+        // A setting written as one scalar for several keys ("locale: ru") becomes a block with that value under each
+        // key ("locale:\n  web: ru\n  telegram: ru\n  ai: ru"), so one of them can then be changed by path.
+        public static string ExpandScalar(string yaml, string path, IEnumerable<string> keys)
+        {
+            if (string.IsNullOrEmpty(yaml)) return yaml;
+            try
+            {
+                var root = Root(yaml);
+                if (root == null) return yaml;
+                var parts = ParsePath(path);
+                if (Navigate(root, parts, 0, out YamlMappingNode parent, out string lastKey) is not YamlScalarNode scalar || parent == null)
+                    return yaml;
+                var keyNode = parent.Children.Keys.OfType<YamlScalarNode>().FirstOrDefault(k => k.Value == lastKey);
+                if (keyNode == null || !SpanOf(scalar, yaml, out int start, out int end)) return yaml;
+                string nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+                string indent = new string(' ', (int)keyNode.Start.Column - 1 + 2);
+                // The key's colon is followed by a space before the scalar: the block starts on the next line.
+                int from = start;
+                while (from > 0 && yaml[from - 1] == ' ') from--;
+                string block = string.Concat(keys.Select(k => nl + indent + k + ": " + FormatScalar(scalar.Value)));
+                return yaml.Substring(0, from) + block + yaml.Substring(end);
+            }
+            catch (YamlDotNet.Core.YamlException) { return yaml; }
+        }
+
         // Drops a sequence item, e.g. "frigate.cameras[camera=yard]". The last remaining item becomes [].
         public static string Remove(string yaml, string path)
         {
@@ -388,171 +413,5 @@ namespace Lookout
             var items = (csv ?? "").Split(',').Select(s => s.Trim()).Where(s => s != "");
             return "[" + string.Join(", ", items.Select(FormatScalar)) + "]";
         }
-    }
-
-    // The structured settings form: a list of fields the UI can render, applied back onto the YAML by path.
-    public static class SettingsForm
-    {
-        // `group`: the section of the pane the field is shown in (labels web.config.section.<group>); null = no section.
-        public record Field(string path, string type, string value, string label, string[] options = null)
-        {
-            public string group { get; init; }
-        }
-        public record Group(string id, string title, List<Field> fields);
-        public record CameraGroup(string camera, List<Field> fields);
-
-        public static object Snapshot(SettingsFile s)
-        {
-            var f = s?.frigate; var m = s?.mqtt; var tg = s?.telegram; var w = s?.web; var o = s?.options; var ai = s?.ai; var fr = s?.fr;
-            var groups = new List<Group>
-            {
-                G("frigate",
-                    S("api", F("frigate.host", "text", f?.host), F("frigate.port", "number", n(f?.port))),
-                    S("files", F("frigate.clipspath", "text", f?.clipspath), F("frigate.dbpath", "text", f?.dbpath),
-                        F("frigate.recordingspath", "text", f?.recordingspath), F("frigate.recordingsoriginalpath", "text", f?.recordingsoriginalpath))),
-                G("mqtt",
-                    S("connection", F("mqtt.host", "text", m?.host), F("mqtt.port", "number", n(m?.port)),
-                        F("mqtt.user", "text", m?.user), F("mqtt.password", "text", m?.password)),
-                    S("topics", F("mqtt.eventstopic", "text", m?.eventstopic), F("mqtt.reviewstopic", "text", m?.reviewstopic))),
-                G("telegram",
-                    S("connection", F("telegram.token", "text", tg?.token),
-                        F("telegram.chatids", "text", tg?.chatids == null ? "" : string.Join(", ", tg.chatids))),
-                    S("media", F("telegram.clipsizecheck", "number", n(tg?.clipsizecheck)), F("telegram.clipsizesplit", "number", n(tg?.clipsizesplit)),
-                        F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit))),
-                    S("links", F("telegram.links.enabled", "checkbox", b(tg?.links?.enabled ?? false)),
-                        F("telegram.links.target", "select", string.IsNullOrEmpty(tg?.links?.target) ? "frigate" : tg.links.target, "frigate", "lookout"),
-                        F("telegram.links.frigateurl", "text", tg?.links?.frigateurl),
-                        F("telegram.links.lookouturl", "text", tg?.links?.lookouturl))),
-                G("notifiers", Array.Empty<Field>()),
-                G("web",
-                    S("access", F("web.auth", "select", w?.auth ?? "basic", "basic", "form"),
-                        F("web.user", "text", w?.user), F("web.password", "text", w?.password),
-                        F("web.sessionhours", "number", n(w?.sessionhours ?? 168)), F("web.secret", "text", w?.secret)),
-                    S("address", F("web.publicurl", "text", w?.publicurl))),
-                G("options",
-                    S("time", F("options.timeoffset", "number", n(o?.timeoffset))),
-                    S("waiting", F("options.timeout", "number", n(o?.timeout)), F("options.retry", "number", n(o?.retry)),
-                        F("options.retrymax", "number", n(o?.retrymax)), F("options.retrybackoff", "number", n(o?.retrybackoff))),
-                    S("notifications", F("options.buttons", "checkbox", b(o?.buttons ?? false)),
-                        F("options.correlate", "number", n(o?.correlate)), F("options.gifwidth", "number", n(o?.gifwidth))),
-                    new[] { F("options.quiet.from", "text", o?.quiet?.from), F("options.quiet.to", "text", o?.quiet?.to),
-                        F("options.quiet.mode", "select", o?.quiet?.mode ?? "silent", "silent", "snapshot", "none") }),
-                G("ai",
-                    S("model", F("ai.provider", "select", string.IsNullOrEmpty(ai?.provider) ? "ollama" : ai.provider, "ollama", "openai", "gemini"),
-                        F("ai.url", "text", ai?.url), F("ai.model", "text", ai?.model), F("ai.apikey", "text", ai?.apikey)),
-                    S("prompts", F("ai.humanprompt", "textarea", ai?.humanprompt), F("ai.nonhumanprompt", "textarea", ai?.nonhumanprompt)),
-                    S("generation", F("ai.numpredict", "number", n(ai?.numpredict)),
-                        F("ai.temperature", "text", ai == null ? "" : ai.temperature.ToString(CultureInfo.InvariantCulture)),
-                        F("ai.thinking", "checkbox", b(ai?.thinking ?? false)), F("ai.resizetowidth", "number", n(ai?.resizetowidth)))),
-                G("fr", F("fr.url", "text", fr?.url), F("fr.apikey", "text", fr?.apikey),
-                    F("fr.confidence", "text", fr == null ? "" : fr.confidence.ToString(CultureInfo.InvariantCulture)),
-                    F("fr.detprobthreshold", "text", fr == null ? "" : fr.detprobthreshold.ToString(CultureInfo.InvariantCulture))),
-            };
-            var cameras = (f?.cameras ?? new List<Camera>()).Select(c => new CameraGroup(c.camera, CameraFields(c.camera, c))).ToList();
-            var notifierList = s?.notifiers ?? new List<NotifierSettings>();
-            var notifiers = notifierList.Select((n, i) => new
-            {
-                index = i,
-                type = string.IsNullOrWhiteSpace(n.type) ? "ntfy" : n.type.Trim().ToLowerInvariant(),
-                fields = NotifierFields(i, n)
-            }).ToList();
-            var notifierTemplates = new[] { "ntfy", "discord", "matrix", "webhook", "telegram" }
-                .ToDictionary(t => t, t => NotifierFields(0, new NotifierSettings { type = t }));
-            return new { groups, cameras, cameraTemplate = CameraFields("{camera}"), notifiers, notifierTemplates };
-        }
-
-        public static List<Field> NotifierFields(int index, NotifierSettings s)
-        {
-            s ??= new NotifierSettings();
-            string kind = string.IsNullOrWhiteSpace(s.type) ? "ntfy" : s.type.Trim().ToLowerInvariant();
-            string p = $"notifiers[{index}]";
-            var list = new List<Field> { F($"{p}.type", "select", kind, "ntfy", "discord", "matrix", "webhook", "telegram") };
-            switch (kind)
-            {
-                case "discord":
-                case "webhook":
-                    list.Add(F($"{p}.url", "text", s.url));
-                    break;
-                case "matrix":
-                    list.Add(F($"{p}.homeserver", "text", s.homeserver));
-                    list.Add(F($"{p}.token", "text", s.token));
-                    list.Add(F($"{p}.room", "text", s.room));
-                    break;
-                case "telegram":
-                    list.Add(F($"{p}.chatids", "text", s.chatids == null ? "" : string.Join(", ", s.chatids)));
-                    break;
-                default:
-                    list.Add(F($"{p}.url", "text", s.url));
-                    list.Add(F($"{p}.token", "text", s.token));
-                    list.Add(F($"{p}.title", "text", s.title));
-                    list.Add(F($"{p}.attach", "checkbox", b(s.attach)));
-                    break;
-            }
-            return list;
-        }
-
-        public static List<Field> CameraFields(string name, Camera c = null)
-        {
-            c ??= new Camera { camera = name };
-            string p = $"frigate.cameras[camera={name}]";
-            return new[]
-            {
-                S("source",
-                    F($"{p}.topic", "select", c.topic ?? "reviews", "reviews", "events"),
-                    F($"{p}.severity", "text", string.Join(", ", c.severity ?? new List<string>())),
-                    F($"{p}.zones", "text", string.Join(", ", c.zones ?? new List<string>())),
-                    F($"{p}.objects", "text", string.Join(", ", (c.objects ?? new List<Objects>()).Where(o => !string.IsNullOrEmpty(o.label))
-                        .Select(o => o.label + ":" + o.percent.ToString(CultureInfo.InvariantCulture))))),
-                S("send",
-                    F($"{p}.snapshot", "checkbox", b(c.snapshot)),
-                    F($"{p}.snapshottrigger", "select", c.snapshottrigger ?? "end", "end", "new"),
-                    F($"{p}.clip", "checkbox", b(c.clip)),
-                    F($"{p}.sctogether", "checkbox", b(c.sctogether)),
-                    F($"{p}.gif", "checkbox", b(c.gif))),
-                S("analysis",
-                    F($"{p}.ai", "checkbox", b(c.ai)),
-                    F($"{p}.fr", "checkbox", b(c.fr))),
-                S("noise",
-                    F($"{p}.cooldown", "number", n(c.cooldown)),
-                    F($"{p}.cooldownperobject", "checkbox", b(c.cooldownperobject)),
-                    F($"{p}.quiet.from", "text", c.quiet?.from),
-                    F($"{p}.quiet.to", "text", c.quiet?.to),
-                    // Empty = the camera follows options.quiet.
-                    F($"{p}.quiet.mode", "select", c.quiet?.mode ?? "", "", "silent", "snapshot", "none")),
-                S("integration",
-                    F($"{p}.trueend", "checkbox", b(c.trueend))),
-            }.SelectMany(x => x).ToList();
-        }
-
-        // Fields of one section of a pane.
-        static Field[] S(string group, params Field[] fields) => fields.Select(f => f with { group = group }).ToArray();
-
-        static string n(long? v) => v == null || v == 0 ? "0" : v.Value.ToString(CultureInfo.InvariantCulture);
-        static string n(int? v) => v == null ? "" : v.Value.ToString(CultureInfo.InvariantCulture);
-        static string b(bool v) => v ? "true" : "false";
-        static string L(string path)
-        {
-            if (path != null && path.StartsWith("notifiers[", StringComparison.Ordinal))
-            {
-                int dot = path.LastIndexOf('.');
-                string nk = "web.field.notifier." + (dot < 0 ? path : path.Substring(dot + 1));
-                if (L10n.Web.Has(nk)) return L10n.Web.T(nk);
-            }
-            // A label for the whole path wins over the one for its last part (e.g. telegram.links.enabled vs enabled).
-            if (path != null && L10n.Web.Has("web.field." + path)) return L10n.Web.T("web.field." + path);
-            string key = "web.field." + path.Replace("frigate.cameras[camera=", "camera.").Replace("]", "");
-            int cut = key.IndexOf("camera.");
-            if (cut >= 0) key = "web.field." + key.Substring(key.LastIndexOf('.') + 1);
-            else
-            {
-                int dot = path.LastIndexOf('.');
-                key = "web.field." + (dot < 0 ? path : path.Substring(dot + 1));
-            }
-            return L10n.Web.Has(key) ? L10n.Web.T(key) : key.Substring("web.field.".Length);
-        }
-        static Field F(string path, string type, string value, params string[] options) =>
-            new Field(path, type, value ?? "", L(path), options is { Length: > 0 } ? options : null);
-        static Group G(string id, params Field[][] sections) => G(id, sections.SelectMany(x => x).ToArray());
-        static Group G(string id, params Field[] fields) => new Group(id, L10n.Web.Has("web.config.group." + id) ? L10n.Web.T("web.config.group." + id) : id, fields.ToList());
     }
 }

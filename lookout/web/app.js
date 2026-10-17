@@ -634,15 +634,19 @@ async function loadConfigYaml() {
   (await getConfigEditor()).setValue(data.content);
 }
 
+// ---- Config form, drawn from the templates in lookout/forms (see Http/SettingsTemplates.cs) ----------------
+// A pane is a list of sections; a section has rows; a row has fields on a 4-column grid (field.width = columns).
 function fieldInput(f) {
+  const attrs = ` data-path="${esc(f.path)}"${f.enabledBy ? ` data-enabled-by="${esc(f.enabledBy)}"` : ''}`;
+  const hint = f.hint ? `<small class="field-hint">${esc(f.hint)}</small>` : '';
   if (f.type === 'checkbox')
-    return `<label class="chk"><input type="checkbox" data-path="${esc(f.path)}"${f.value === 'true' ? ' checked' : ''}> ${esc(f.label)}</label>`;
+    return `<label class="chk"><input type="checkbox"${attrs}${f.value === 'true' ? ' checked' : ''}> ${esc(f.label)}${hint}</label>`;
   if (f.type === 'select')
-    return `<label>${esc(f.label)}<select data-path="${esc(f.path)}">${(f.options || []).map(o => `<option value="${esc(o)}"${o === f.value ? ' selected' : ''}>${esc(optionLabel(f, o))}</option>`).join('')}</select></label>`;
+    return `<label>${esc(f.label)}<select${attrs}>${(f.options || []).map(o => `<option value="${esc(o)}"${o === f.value ? ' selected' : ''}>${esc(optionLabel(f, o))}</option>`).join('')}</select>${hint}</label>`;
   if (f.type === 'textarea')
-    return `<label>${esc(f.label)}<textarea data-path="${esc(f.path)}" rows="3">${esc(f.value)}</textarea></label>`;
+    return `<label>${esc(f.label)}<textarea${attrs} rows="3">${esc(f.value)}</textarea>${hint}</label>`;
   const type = f.type === 'number' ? 'number' : 'text';
-  return `<label>${esc(f.label)}<input type="${type}" data-path="${esc(f.path)}" value="${esc(f.value)}"></label>`;
+  return `<label>${esc(f.label)}<input type="${type}"${attrs} value="${esc(f.value)}">${hint}</label>`;
 }
 
 function optionLabel(f, o) {
@@ -651,6 +655,28 @@ function optionLabel(f, o) {
     return t('web.config.notifier.' + o);
   return o;
 }
+
+function renderSections(sections) {
+  return (sections || []).map(sec => {
+    const rows = sec.rows.map(r => `<div class="settings-grid form-row">${r.map(f =>
+      `<div class="form-cell" style="--w:${f.width || 1}">${fieldInput(f)}</div>`).join('')}</div>`).join('');
+    return sec.title ? `<div class="sub-block"><div class="sub-title">${esc(sec.title)}</div>${rows}</div>` : rows;
+  }).join('');
+}
+
+// Fields with enabledBy are greyed out (values kept and saved) while that checkbox is off.
+function applyEnabledBy(root) {
+  root.querySelectorAll('[data-enabled-by]').forEach(el => {
+    const master = root.querySelector(`[data-path="${CSS.escape(el.dataset.enabledBy)}"]`);
+    const on = !master || master.checked;
+    el.disabled = !on;
+    el.closest('.form-cell')?.classList.toggle('off', !on);
+  });
+}
+
+document.addEventListener('change', e => {
+  if (e.target.type === 'checkbox' && e.target.closest('#config-form')) applyEnabledBy(document.getElementById('config-form'));
+});
 
 let formTree = [];
 let cameraTemplate = [];
@@ -662,35 +688,25 @@ let removedNotifiers = [];
 const CAMERA_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const NOTIFIER_TYPES = ['ntfy', 'discord', 'matrix', 'webhook', 'telegram'];
 
+// The tree as tree.json gives it; "cameras" / "notifiers" children are the config's cameras and channels.
 function settingsTree(data) {
-  return (data.groups || []).map(g => {
-    if (g.id === 'frigate')
-      return {
-        id: g.id, title: g.title, fields: g.fields,
-        children: (data.cameras || []).map(c => ({ id: 'cam:' + c.camera, title: c.camera, fields: c.fields }))
-      };
-    if (g.id === 'notifiers')
-      return {
-        id: g.id, title: g.title, fields: [],
-        children: (data.notifiers || []).map(n => ({
-          id: 'n:' + n.index,
-          title: t('web.config.notifier.' + n.type),
-          ntype: n.type,
-          originalIndex: n.index,
-          fields: n.fields
-        }))
-      };
-    if (g.id === 'options') {
-      const quiet = (g.fields || []).filter(f => f.path.startsWith('options.quiet.'));
-      const rest = (g.fields || []).filter(f => !f.path.startsWith('options.quiet.'));
-      return {
-        id: g.id, title: g.title, fields: rest,
-        children: quiet.length ? [{ id: 'quiet', title: t('web.config.group.quiet'), fields: quiet }] : []
-      };
-    }
-    return { id: g.id, title: g.title, fields: g.fields || [] };
-  });
+  const node = n => {
+    const out = { id: n.id, title: n.title, hint: n.hint, sections: n.sections || [] };
+    if (n.children === 'cameras')
+      out.children = (data.cameras || []).map(c => ({ id: 'cam:' + c.camera, title: c.camera, sections: c.sections }));
+    else if (n.children === 'notifiers')
+      out.children = (data.notifiers || []).map(x => ({
+        id: 'n:' + x.index, title: t('web.config.notifier.' + x.type), ntype: x.type, originalIndex: x.index, sections: x.sections
+      }));
+    else if (Array.isArray(n.children))
+      out.children = n.children.map(node);
+    return out;
+  };
+  return (data.tree || []).map(node);
 }
+
+const nodeFields = n => (n.sections || []).flatMap(s => s.rows.flat());
+const mapSections = (sections, fn) => (sections || []).map(s => Object.assign({}, s, { rows: s.rows.map(r => r.map(f => fn(Object.assign({}, f)))) }));
 
 function treeHas(nodes, id) {
   return nodes.some(n => n.id === id || (n.children && treeHas(n.children, id)));
@@ -726,12 +742,9 @@ function renderTreePanes(nodes) {
         : ni !== ''
         ? `<button type="button" class="btn tree-del" data-del-notifier="${esc(ni)}">${esc(t('web.config.remove_notifier'))}</button>`
         : '';
-      const hint = n.id === 'notifiers'
-        ? `<p class="tree-hint">${esc(t('web.config.notifiers_hint'))}</p>`
-        : '';
-      const grid = cam ? 'settings-grid cams' : 'settings-grid';
+      const hint = n.hint ? `<p class="tree-hint">${esc(n.hint)}</p>` : '';
       html += `<div class="tree-pane" data-pane="${esc(n.id)}"><div class="tree-pane-head"><h3>${esc(n.title)}</h3>${del}</div>${hint}`
-        + paneFields(n.fields || [], grid)
+        + renderSections(n.sections)
         + `</div>`;
       if (n.children) walk(n.children);
     }
@@ -739,61 +752,12 @@ function renderTreePanes(nodes) {
   return html;
 }
 
-// Fields of a pane, grouped: by the sections the server gives (field.group, e.g. "Source", "What to send" of a
-// camera), otherwise as a tree by YAML path (the pane's own keys first, every nested block indented under its
-// title). A block's "enabled" checkbox comes first and, while off, greys out the rest of the block (values are kept).
-function paneFields(fields, grid) {
-  if (!fields.length) return '';
-  const sections = new Map();
-  const add = (key, f) => (sections.get(key) || sections.set(key, []).get(key)).push(f);
-  if (fields.some(f => f.group)) {
-    fields.forEach(f => add(f.group || '', f));
-    return [...sections].map(([g, list]) => g ? subBlock(sectionTitle(g), list, grid) : plainGrid(list, grid)).join('');
-  }
-  const parentOf = p => p.slice(0, p.lastIndexOf('.'));
-  const base = fields.map(f => parentOf(f.path)).reduce((a, b) => (b.length < a.length ? b : a));
-  fields.forEach(f => add(parentOf(f.path), f));
-  return [...sections].map(([path, list]) => path === base
-    ? plainGrid(list, grid)
-    : subBlock(sectionTitle(path.slice(path.lastIndexOf('.') + 1)), list, grid)).join('');
-}
-
-function sectionTitle(key) {
-  if (I18N['web.config.section.' + key]) return t('web.config.section.' + key);
-  if (I18N['web.config.group.' + key]) return t('web.config.group.' + key);
-  return key;
-}
-
-function plainGrid(list, grid) {
-  return `<div class="${grid}">${list.map(fieldInput).join('')}</div>`;
-}
-
-function subBlock(title, list, grid) {
-  const master = list.find(f => f.type === 'checkbox' && f.path.endsWith('.enabled'));
-  const rest = list.filter(f => f !== master);
-  const off = master && master.value !== 'true';
-  return `<div class="sub-block${off ? ' off' : ''}"><div class="sub-title">${esc(title)}</div>`
-    + `<div class="${grid}">${master ? fieldInput(master).replace('<label class="chk">', '<label class="chk sub-master">') : ''}`
-    + rest.map(f => off ? fieldInput(f).replace(' data-path=', ' disabled data-path=') : fieldInput(f)).join('')
-    + `</div></div>`;
-}
-
-// The master checkbox of a block enables or greys out the other fields of that block.
-document.addEventListener('change', e => {
-  const master = e.target.closest('.sub-master');
-  if (!master) return;
-  const block = master.closest('.sub-block');
-  const on = e.target.checked;
-  block.classList.toggle('off', !on);
-  block.querySelectorAll('[data-path]').forEach(el => { if (el !== e.target) el.disabled = !on; });
-});
-
 function captureFields() {
   document.querySelectorAll('#config-form [data-path]').forEach(el => {
     const v = el.type === 'checkbox' ? (el.checked ? 'true' : 'false') : el.value;
     (function walk(list) {
       for (const n of list) {
-        const f = (n.fields || []).find(x => x.path === el.dataset.path);
+        const f = nodeFields(n).find(x => x.path === el.dataset.path);
         if (f) f.value = v;
         if (n.children) walk(n.children);
       }
@@ -815,6 +779,7 @@ function renderSettings(selected) {
     if (!/^notifiers\[\d+\]\.type$/.test(sel.dataset.path)) return;
     sel.onchange = () => changeNotifierType(sel.dataset.path, sel.value);
   });
+  applyEnabledBy(host);
   showConfigNode(selected);
 }
 
@@ -862,7 +827,10 @@ function commitAddCamera(name) {
   fr.children.push({
     id: 'cam:' + name,
     title: name,
-    fields: (cameraTemplate || []).map(f => Object.assign({}, f, { path: String(f.path).split('{camera}').join(name) }))
+    sections: mapSections(cameraTemplate, f => Object.assign(f, {
+      path: String(f.path).split('{camera}').join(name),
+      enabledBy: f.enabledBy ? String(f.enabledBy).split('{camera}').join(name) : f.enabledBy
+    }))
   });
   renderSettings('cam:' + name);
 }
@@ -877,10 +845,12 @@ function removeCamera(name) {
   renderSettings('frigate');
 }
 
+const withNotifierIndex = (p, i) => p ? String(p).replace(/notifiers\[\d+\]/, 'notifiers[' + i + ']') : p;
+
 function notifierFieldsFromTemplate(type, index) {
-  const tmpl = notifierTemplates[type] || notifierTemplates.ntfy || [];
-  return tmpl.map(f => Object.assign({}, f, {
-    path: String(f.path).replace(/notifiers\[\d+\]/, 'notifiers[' + index + ']'),
+  return mapSections(notifierTemplates[type] || notifierTemplates.ntfy || [], f => Object.assign(f, {
+    path: withNotifierIndex(f.path, index),
+    enabledBy: withNotifierIndex(f.enabledBy, index),
     value: String(f.path).endsWith('.type') ? type : (f.value || '')
   }));
 }
@@ -890,8 +860,8 @@ function reindexNotifiers() {
   if (!n?.children) return;
   n.children.forEach((c, i) => {
     c.id = 'n:' + i;
-    c.fields = (c.fields || []).map(f => Object.assign({}, f, {
-      path: String(f.path).replace(/notifiers\[\d+\]/, 'notifiers[' + i + ']')
+    c.sections = mapSections(c.sections, f => Object.assign(f, {
+      path: withNotifierIndex(f.path, i), enabledBy: withNotifierIndex(f.enabledBy, i)
     }));
   });
 }
@@ -934,7 +904,7 @@ function commitAddNotifier(type) {
     title: t('web.config.notifier.' + type),
     ntype: type,
     originalIndex: null,
-    fields: notifierFieldsFromTemplate(type, i)
+    sections: notifierFieldsFromTemplate(type, i)
   });
   renderSettings('n:' + i);
 }
@@ -963,7 +933,7 @@ function changeNotifierType(path, type) {
   captureFields();
   child.ntype = type;
   child.title = t('web.config.notifier.' + type);
-  child.fields = notifierFieldsFromTemplate(type, i);
+  child.sections = notifierFieldsFromTemplate(type, i);
   renderSettings('n:' + i);
 }
 

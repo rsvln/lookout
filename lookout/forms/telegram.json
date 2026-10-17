@@ -1,0 +1,17 @@
+{
+  "base": "telegram",
+  "title": "web.config.group.telegram",
+  "sections": [
+    { "title": "web.config.section.connection", "rows": [
+      [ { "path": "token", "width": 2 }, { "path": "chatids", "width": 2 } ],
+      [ { "path": "apiserver", "width": 2 } ] ] },
+    { "title": "web.config.section.media", "rows": [
+      [ { "path": "clipsizecheck" }, { "path": "clipsizesplit" }, { "path": "mediagrouplimit" } ] ] },
+    { "title": "web.config.section.sending", "rows": [
+      [ { "path": "sendchatstimepause" }, { "path": "retryonratelimit" } ] ] },
+    { "title": "web.config.group.links", "rows": [
+      [ { "path": "links.enabled", "width": 4 } ],
+      [ { "path": "links.target", "options": [ "frigate", "lookout" ], "enabledBy": "links.enabled" } ],
+      [ { "path": "links.frigateurl", "width": 2, "enabledBy": "links.enabled" }, { "path": "links.lookouturl", "width": 2, "enabledBy": "links.enabled" } ] ] }
+  ]
+}

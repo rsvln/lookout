@@ -1,0 +1,9 @@
+{
+  "base": "notifiers[{index}]",
+  "sections": [
+    { "rows": [
+      [ { "path": "type", "options": [ "ntfy", "discord", "matrix", "webhook", "telegram" ] } ],
+      [ { "path": "homeserver", "width": 2 }, { "path": "room", "width": 2 } ],
+      [ { "path": "token", "width": 2 } ] ] }
+  ]
+}

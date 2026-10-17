@@ -1,0 +1,19 @@
+{
+  "base": "frigate.cameras[camera={camera}]",
+  "sections": [
+    { "title": "web.config.section.source", "rows": [
+      [ { "path": "topic", "options": [ "reviews", "events" ] }, { "path": "severity" }, { "path": "zones", "width": 2 } ],
+      [ { "path": "objects", "width": 4 } ] ] },
+    { "title": "web.config.section.send", "rows": [
+      [ { "path": "snapshot" }, { "path": "snapshottrigger", "options": [ "end", "new" ], "enabledBy": "snapshot" } ],
+      [ { "path": "clip" }, { "path": "sctogether", "enabledBy": "clip", "width": 2 } ],
+      [ { "path": "gif" } ] ] },
+    { "title": "web.config.section.analysis", "rows": [
+      [ { "path": "ai" }, { "path": "fr" } ] ] },
+    { "title": "web.config.section.noise", "rows": [
+      [ { "path": "cooldown" }, { "path": "cooldownperobject", "width": 2 } ],
+      [ { "path": "quiet.from" }, { "path": "quiet.to" }, { "path": "quiet.mode", "options": [ "", "silent", "snapshot", "none" ], "default": "" } ] ] },
+    { "title": "web.config.section.integration", "rows": [
+      [ { "path": "trueend" } ] ] }
+  ]
+}

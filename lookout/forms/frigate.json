@@ -1,0 +1,11 @@
+{
+  "base": "frigate",
+  "title": "web.config.group.frigate",
+  "sections": [
+    { "title": "web.config.section.api", "rows": [
+      [ { "path": "host", "width": 2 }, { "path": "port" } ] ] },
+    { "title": "web.config.section.files", "rows": [
+      [ { "path": "clipspath", "width": 2 }, { "path": "dbpath", "width": 2 } ],
+      [ { "path": "recordingspath", "width": 2 }, { "path": "recordingsoriginalpath", "width": 2 } ] ] }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "base": "web",
+  "title": "web.config.group.web",
+  "sections": [
+    { "title": "web.config.section.access", "rows": [
+      [ { "path": "auth", "options": [ "basic", "form" ] }, { "path": "user" }, { "path": "password" } ],
+      [ { "path": "sessionhours" }, { "path": "secret", "width": 2 } ] ] },
+    { "title": "web.config.section.address", "rows": [
+      [ { "path": "publicurl", "width": 2 } ] ] }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "base": "fr",
+  "title": "web.config.group.fr",
+  "sections": [
+    { "title": "web.config.section.connection", "rows": [
+      [ { "path": "url", "width": 2 }, { "path": "apikey", "width": 2 } ] ] },
+    { "title": "web.config.section.thresholds", "rows": [
+      [ { "path": "confidence" }, { "path": "detprobthreshold" } ] ] }
+  ]
+}

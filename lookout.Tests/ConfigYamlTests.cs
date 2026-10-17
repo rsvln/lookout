@@ -57,7 +57,10 @@ namespace Lookout.Tests
         {
             string yaml = "frigate:\n  host: h\n  cameras:\n    - camera: yard\n      objects:\n        - label: person\n          percent: 70\n    - camera: gate\nmqtt:\n  host: h\ntelegram:\n  chatids: ['-1']\noptions:\n  timeoffset: 0\nlogger:\n  file: false\n";
             var before = WebUi.ParseSettings(yaml);
-            var fields = SettingsForm.CameraFields("yard", before.frigate.cameras[0]).ToDictionary(f => f.path, f => f.value);
+            Program.appLocation = AppContext.BaseDirectory;
+            L10n.Load("en", "en", "en");
+            var fields = SettingsForm.Render("camera", before, ("{camera}", "yard"))
+                .SelectMany(sec => sec.rows.SelectMany(r => r)).ToDictionary(f => f.path, f => f.value);
             Assert.Equal("person:70", fields["frigate.cameras[camera=yard].objects"]);
             Assert.Equal("", fields["frigate.cameras[camera=yard].quiet.mode"]);   // follows options.quiet
 

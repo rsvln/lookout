@@ -1,0 +1,18 @@
+{
+  "base": "options",
+  "title": "web.config.group.options",
+  "sections": [
+    { "title": "web.config.section.time", "rows": [
+      [ { "path": "timeoffset" } ] ] },
+    { "title": "web.config.section.languages", "rows": [
+      [ { "path": "locale.web", "options": "$locales" }, { "path": "locale.telegram", "options": "$locales" }, { "path": "locale.ai", "options": "$locales" } ] ] },
+    { "title": "web.config.section.waiting", "rows": [
+      [ { "path": "timeout" }, { "path": "retry" } ],
+      [ { "path": "sendeverythingwhatyouhave", "width": 4 } ],
+      [ { "path": "retrymax" }, { "path": "retrybackoff" } ] ] },
+    { "title": "web.config.section.notifications", "rows": [
+      [ { "path": "buttons" }, { "path": "correlate" }, { "path": "gifwidth" } ] ] },
+    { "title": "web.config.section.logging", "base": "logger", "rows": [
+      [ { "path": "file" }, { "path": "console" } ] ] }
+  ]
+}

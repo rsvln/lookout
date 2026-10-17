@@ -1,0 +1,14 @@
+{
+  "base": "ai",
+  "title": "web.config.group.ai",
+  "sections": [
+    { "title": "web.config.section.model", "rows": [
+      [ { "path": "provider", "options": [ "ollama", "openai", "gemini" ] }, { "path": "model" }, { "path": "url", "width": 2 } ],
+      [ { "path": "apikey", "width": 2 } ] ] },
+    { "title": "web.config.section.prompts", "rows": [
+      [ { "path": "humanprompt", "control": "textarea" } ],
+      [ { "path": "nonhumanprompt", "control": "textarea" } ] ] },
+    { "title": "web.config.section.generation", "rows": [
+      [ { "path": "numpredict" }, { "path": "temperature" }, { "path": "resizetowidth" }, { "path": "thinking" } ] ] }
+  ]
+}

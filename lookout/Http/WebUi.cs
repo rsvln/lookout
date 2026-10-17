@@ -10,6 +10,10 @@ namespace Lookout
     {
         public static void Start(string configPath)
         {
+            // A broken form template shows up in the log right away (the Config form then reports it as well).
+            try { SettingsForm.Load(); }
+            catch (Exception ex) { Program.Log("app", "", "", "Config form templates: " + ex.Message); }
+
             Task.Run(() =>
             {
                 var builder = WebApplication.CreateBuilder();

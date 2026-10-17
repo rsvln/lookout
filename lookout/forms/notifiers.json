@@ -1,0 +1,6 @@
+{
+  "base": "notifiers",
+  "title": "web.config.group.notifiers",
+  "hint": "web.config.notifiers_hint",
+  "sections": []
+}

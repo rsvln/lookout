@@ -1,0 +1,11 @@
+{
+  "base": "mqtt",
+  "title": "web.config.group.mqtt",
+  "sections": [
+    { "title": "web.config.section.connection", "rows": [
+      [ { "path": "host", "width": 2 }, { "path": "port" } ],
+      [ { "path": "user" }, { "path": "password" } ] ] },
+    { "title": "web.config.section.topics", "rows": [
+      [ { "path": "eventstopic", "width": 2 }, { "path": "reviewstopic", "width": 2 } ] ] }
+  ]
+}

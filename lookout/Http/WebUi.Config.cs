@@ -36,6 +36,9 @@ namespace Lookout
                     if (data.removeNotifiers != null)
                         foreach (var i in data.removeNotifiers.Where(x => x >= 0 && x < 64).Distinct().OrderByDescending(x => x))
                             yaml = ConfigYaml.Remove(yaml, "notifiers[" + i + "]");
+                    // "locale: ru" (one language for all) is spread to its areas before one of them is changed.
+                    if (data.fields.Keys.Any(k => k.StartsWith("options.locale.", StringComparison.Ordinal)))
+                        yaml = ConfigYaml.ExpandScalar(yaml, "options.locale", new[] { "web", "telegram", "ai" });
                     yaml = ConfigYaml.Apply(yaml, data.fields);
                 }
                 catch (Exception ex)

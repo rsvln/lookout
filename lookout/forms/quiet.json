@@ -1,0 +1,8 @@
+{
+  "base": "options.quiet",
+  "title": "web.config.group.quiet",
+  "sections": [
+    { "rows": [
+      [ { "path": "from" }, { "path": "to" }, { "path": "mode", "options": [ "silent", "snapshot", "none" ], "default": "silent" } ] ] }
+  ]
+}

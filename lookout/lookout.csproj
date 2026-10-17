@@ -21,6 +21,8 @@
 	</ItemGroup>
 	<ItemGroup>
 		<Content Update="locales\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<!-- Config form layout (one template per tree node), see Http/SettingsTemplates.cs -->
+		<Content Update="forms\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 		<!-- webui/ is the YAML editor's npm source, kept out of the build; only its bundle in web/ is used -->
 		<Compile Remove="webui\**" />
 		<Content Remove="webui\**" />

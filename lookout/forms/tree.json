@@ -1,0 +1,17 @@
+{
+  "nodes": [
+    { "node": "frigate", "children": "cameras" },
+    { "node": "mqtt" },
+    { "node": "telegram" },
+    { "node": "notifiers", "children": "notifiers" },
+    { "node": "web" },
+    { "node": "options", "children": [ { "node": "quiet" } ] },
+    { "node": "ai" },
+    { "node": "fr" }
+  ],
+  "hidden": {
+    "frigate.cameras[].camera": "the camera's name is its item in the tree",
+    "notifiers[].apikey": "not used by any channel type",
+    "web.users": "a list of users with roles; edited in YAML"
+  }
+}
