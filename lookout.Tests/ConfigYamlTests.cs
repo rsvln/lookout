@@ -53,6 +53,30 @@ namespace Lookout.Tests
         }
 
         [Fact]
+        public void CameraForm_ListsObjectsAndQuiet_RoundTrip()
+        {
+            string yaml = "frigate:\n  host: h\n  cameras:\n    - camera: yard\n      objects:\n        - label: person\n          percent: 70\n    - camera: gate\nmqtt:\n  host: h\ntelegram:\n  chatids: ['-1']\noptions:\n  timeoffset: 0\nlogger:\n  file: false\n";
+            var before = WebUi.ParseSettings(yaml);
+            var fields = SettingsForm.CameraFields("yard", before.frigate.cameras[0]).ToDictionary(f => f.path, f => f.value);
+            Assert.Equal("person:70", fields["frigate.cameras[camera=yard].objects"]);
+            Assert.Equal("", fields["frigate.cameras[camera=yard].quiet.mode"]);   // follows options.quiet
+
+            fields["frigate.cameras[camera=yard].objects"] = "person:60, car";
+            fields["frigate.cameras[camera=yard].zones"] = "drive, porch";
+            fields["frigate.cameras[camera=yard].severity"] = "alert";
+            fields["frigate.cameras[camera=yard].quiet.from"] = "23:00";
+            fields["frigate.cameras[camera=yard].quiet.to"] = "06:00";
+            var s = WebUi.ParseSettings(ConfigYaml.Apply(yaml, fields));
+            var yard = s.frigate.cameras.Single(c => c.camera == "yard");
+            Assert.Equal(new[] { ("person", 60), ("car", 50) }, yard.objects.Select(o => (o.label, o.percent)));
+            Assert.Equal(new List<string> { "drive", "porch" }, yard.zones);
+            Assert.Equal(new List<string> { "alert" }, yard.severity);
+            Assert.Equal("23:00", yard.quiet.from);
+            Assert.Equal("06:00", yard.quiet.to);
+            Assert.Null(s.frigate.cameras.Single(c => c.camera == "gate").quiet);   // other cameras untouched
+        }
+
+        [Fact]
         public void Set_InsertsAfterAFlowSequence_NotInsideIt()
         {
             string yaml = "telegram:\n  token: x\n  chatids: ['-1']\noptions:\n  timeoffset: 0\n";

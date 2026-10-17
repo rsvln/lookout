@@ -153,9 +153,7 @@ namespace Lookout
             var child = Navigate(node, parts, i, out YamlMappingNode parent, out string lastKey);
             if (child == null) return false;
             if (!SpanOf(child, yaml, out int start, out int end)) return false;
-            string text = child is YamlSequenceNode
-                ? FormatSequence(value)
-                : FormatScalar(value);
+            string text = FormatValue(lastKey, value, child is YamlSequenceNode);
             next = yaml.Substring(0, start) + text + yaml.Substring(end);
             return true;
         }
@@ -192,9 +190,7 @@ namespace Lookout
             }
             if (insertAt < 0 || insertAt > yaml.Length) return null;
             string leaf = parts[parts.Count - 1].key;
-            string formatted = string.Equals(leaf, "chatids", StringComparison.OrdinalIgnoreCase)
-                ? FormatSequence(value)
-                : FormatScalar(value);
+            string formatted = FormatValue(leaf, value, false);
             var line = new System.Text.StringBuilder();
             for (int d = depth; d < parts.Count; d++)
             {
@@ -362,6 +358,31 @@ namespace Lookout
             return end > start && start >= 0 && end <= yaml.Length;
         }
 
+        // Keys whose value is a list of scalars ("a, b" in the form) and the per-camera object thresholds.
+        static readonly HashSet<string> ListKeys = new(StringComparer.OrdinalIgnoreCase) { "chatids", "severity", "zones" };
+
+        static string FormatValue(string key, string value, bool isSequence)
+        {
+            if (string.Equals(key, "objects", StringComparison.OrdinalIgnoreCase)) return FormatObjects(value);
+            if (isSequence || (key != null && ListKeys.Contains(key))) return FormatSequence(value);
+            return FormatScalar(value);
+        }
+
+        // "person:60, car, dog:40" -> [{label: person, percent: 60}, {label: car}, {label: dog, percent: 40}]
+        static string FormatObjects(string csv)
+        {
+            var items = (csv ?? "").Split(',').Select(s => s.Trim()).Where(s => s != "").Select(item =>
+            {
+                int colon = item.LastIndexOf(':');
+                string label = colon > 0 ? item.Substring(0, colon).Trim() : item;
+                string percent = colon > 0 ? item.Substring(colon + 1).Trim() : "";
+                return int.TryParse(percent, NumberStyles.Integer, CultureInfo.InvariantCulture, out int p)
+                    ? "{label: " + FormatScalar(label) + ", percent: " + p + "}"
+                    : "{label: " + FormatScalar(label) + "}";
+            });
+            return "[" + string.Join(", ", items) + "]";
+        }
+
         static string FormatSequence(string csv)
         {
             var items = (csv ?? "").Split(',').Select(s => s.Trim()).Where(s => s != "");
@@ -372,7 +393,11 @@ namespace Lookout
     // The structured settings form: a list of fields the UI can render, applied back onto the YAML by path.
     public static class SettingsForm
     {
-        public record Field(string path, string type, string value, string label, string[] options = null);
+        // `group`: the section of the pane the field is shown in (labels web.config.section.<group>); null = no section.
+        public record Field(string path, string type, string value, string label, string[] options = null)
+        {
+            public string group { get; init; }
+        }
         public record Group(string id, string title, List<Field> fields);
         public record CameraGroup(string camera, List<Field> fields);
 
@@ -381,36 +406,44 @@ namespace Lookout
             var f = s?.frigate; var m = s?.mqtt; var tg = s?.telegram; var w = s?.web; var o = s?.options; var ai = s?.ai; var fr = s?.fr;
             var groups = new List<Group>
             {
-                G("frigate", F("frigate.host", "text", f?.host), F("frigate.port", "number", n(f?.port)),
-                    F("frigate.clipspath", "text", f?.clipspath), F("frigate.dbpath", "text", f?.dbpath),
-                    F("frigate.recordingspath", "text", f?.recordingspath), F("frigate.recordingsoriginalpath", "text", f?.recordingsoriginalpath)),
-                G("mqtt", F("mqtt.host", "text", m?.host), F("mqtt.port", "number", n(m?.port)),
-                    F("mqtt.user", "text", m?.user), F("mqtt.password", "text", m?.password),
-                    F("mqtt.eventstopic", "text", m?.eventstopic), F("mqtt.reviewstopic", "text", m?.reviewstopic)),
-                G("telegram", F("telegram.token", "text", tg?.token),
-                    F("telegram.chatids", "text", tg?.chatids == null ? "" : string.Join(", ", tg.chatids)),
-                    F("telegram.clipsizecheck", "number", n(tg?.clipsizecheck)), F("telegram.clipsizesplit", "number", n(tg?.clipsizesplit)),
-                    F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit)),
-                    F("telegram.links.enabled", "checkbox", b(tg?.links?.enabled ?? false)),
-                    F("telegram.links.target", "select", string.IsNullOrEmpty(tg?.links?.target) ? "frigate" : tg.links.target, "frigate", "lookout"),
-                    F("telegram.links.frigateurl", "text", tg?.links?.frigateurl),
-                    F("telegram.links.lookouturl", "text", tg?.links?.lookouturl)),
-                G("notifiers"),
-                G("web", F("web.user", "text", w?.user), F("web.password", "text", w?.password),
-                    F("web.publicurl", "text", w?.publicurl), F("web.auth", "select", w?.auth ?? "basic", "basic", "form"),
-                    F("web.sessionhours", "number", n(w?.sessionhours ?? 168)), F("web.secret", "text", w?.secret)),
-                G("options", F("options.timeoffset", "number", n(o?.timeoffset)), F("options.timeout", "number", n(o?.timeout)),
-                    F("options.retry", "number", n(o?.retry)), F("options.retrymax", "number", n(o?.retrymax)),
-                    F("options.retrybackoff", "number", n(o?.retrybackoff)), F("options.correlate", "number", n(o?.correlate)),
-                    F("options.gifwidth", "number", n(o?.gifwidth)),
-                    F("options.buttons", "checkbox", b(o?.buttons ?? false)),
-                    F("options.quiet.from", "text", o?.quiet?.from), F("options.quiet.to", "text", o?.quiet?.to),
-                    F("options.quiet.mode", "select", o?.quiet?.mode ?? "silent", "silent", "snapshot", "none")),
-                G("ai", F("ai.provider", "select", string.IsNullOrEmpty(ai?.provider) ? "ollama" : ai.provider, "ollama", "openai", "gemini"),
-                    F("ai.url", "text", ai?.url), F("ai.model", "text", ai?.model), F("ai.apikey", "text", ai?.apikey),
-                    F("ai.humanprompt", "textarea", ai?.humanprompt), F("ai.nonhumanprompt", "textarea", ai?.nonhumanprompt),
-                    F("ai.numpredict", "number", n(ai?.numpredict)), F("ai.temperature", "text", ai == null ? "" : ai.temperature.ToString(CultureInfo.InvariantCulture)),
-                    F("ai.thinking", "checkbox", b(ai?.thinking ?? false)), F("ai.resizetowidth", "number", n(ai?.resizetowidth))),
+                G("frigate",
+                    S("api", F("frigate.host", "text", f?.host), F("frigate.port", "number", n(f?.port))),
+                    S("files", F("frigate.clipspath", "text", f?.clipspath), F("frigate.dbpath", "text", f?.dbpath),
+                        F("frigate.recordingspath", "text", f?.recordingspath), F("frigate.recordingsoriginalpath", "text", f?.recordingsoriginalpath))),
+                G("mqtt",
+                    S("connection", F("mqtt.host", "text", m?.host), F("mqtt.port", "number", n(m?.port)),
+                        F("mqtt.user", "text", m?.user), F("mqtt.password", "text", m?.password)),
+                    S("topics", F("mqtt.eventstopic", "text", m?.eventstopic), F("mqtt.reviewstopic", "text", m?.reviewstopic))),
+                G("telegram",
+                    S("connection", F("telegram.token", "text", tg?.token),
+                        F("telegram.chatids", "text", tg?.chatids == null ? "" : string.Join(", ", tg.chatids))),
+                    S("media", F("telegram.clipsizecheck", "number", n(tg?.clipsizecheck)), F("telegram.clipsizesplit", "number", n(tg?.clipsizesplit)),
+                        F("telegram.mediagrouplimit", "number", n(tg?.mediagrouplimit))),
+                    S("links", F("telegram.links.enabled", "checkbox", b(tg?.links?.enabled ?? false)),
+                        F("telegram.links.target", "select", string.IsNullOrEmpty(tg?.links?.target) ? "frigate" : tg.links.target, "frigate", "lookout"),
+                        F("telegram.links.frigateurl", "text", tg?.links?.frigateurl),
+                        F("telegram.links.lookouturl", "text", tg?.links?.lookouturl))),
+                G("notifiers", Array.Empty<Field>()),
+                G("web",
+                    S("access", F("web.auth", "select", w?.auth ?? "basic", "basic", "form"),
+                        F("web.user", "text", w?.user), F("web.password", "text", w?.password),
+                        F("web.sessionhours", "number", n(w?.sessionhours ?? 168)), F("web.secret", "text", w?.secret)),
+                    S("address", F("web.publicurl", "text", w?.publicurl))),
+                G("options",
+                    S("time", F("options.timeoffset", "number", n(o?.timeoffset))),
+                    S("waiting", F("options.timeout", "number", n(o?.timeout)), F("options.retry", "number", n(o?.retry)),
+                        F("options.retrymax", "number", n(o?.retrymax)), F("options.retrybackoff", "number", n(o?.retrybackoff))),
+                    S("notifications", F("options.buttons", "checkbox", b(o?.buttons ?? false)),
+                        F("options.correlate", "number", n(o?.correlate)), F("options.gifwidth", "number", n(o?.gifwidth))),
+                    new[] { F("options.quiet.from", "text", o?.quiet?.from), F("options.quiet.to", "text", o?.quiet?.to),
+                        F("options.quiet.mode", "select", o?.quiet?.mode ?? "silent", "silent", "snapshot", "none") }),
+                G("ai",
+                    S("model", F("ai.provider", "select", string.IsNullOrEmpty(ai?.provider) ? "ollama" : ai.provider, "ollama", "openai", "gemini"),
+                        F("ai.url", "text", ai?.url), F("ai.model", "text", ai?.model), F("ai.apikey", "text", ai?.apikey)),
+                    S("prompts", F("ai.humanprompt", "textarea", ai?.humanprompt), F("ai.nonhumanprompt", "textarea", ai?.nonhumanprompt)),
+                    S("generation", F("ai.numpredict", "number", n(ai?.numpredict)),
+                        F("ai.temperature", "text", ai == null ? "" : ai.temperature.ToString(CultureInfo.InvariantCulture)),
+                        F("ai.thinking", "checkbox", b(ai?.thinking ?? false)), F("ai.resizetowidth", "number", n(ai?.resizetowidth)))),
                 G("fr", F("fr.url", "text", fr?.url), F("fr.apikey", "text", fr?.apikey),
                     F("fr.confidence", "text", fr == null ? "" : fr.confidence.ToString(CultureInfo.InvariantCulture)),
                     F("fr.detprobthreshold", "text", fr == null ? "" : fr.detprobthreshold.ToString(CultureInfo.InvariantCulture))),
@@ -462,20 +495,37 @@ namespace Lookout
         {
             c ??= new Camera { camera = name };
             string p = $"frigate.cameras[camera={name}]";
-            return new List<Field>
+            return new[]
             {
-                F($"{p}.snapshot", "checkbox", b(c.snapshot)),
-                F($"{p}.clip", "checkbox", b(c.clip)),
-                F($"{p}.gif", "checkbox", b(c.gif)),
-                F($"{p}.ai", "checkbox", b(c.ai)),
-                F($"{p}.fr", "checkbox", b(c.fr)),
-                F($"{p}.trueend", "checkbox", b(c.trueend)),
-                F($"{p}.topic", "select", c.topic ?? "reviews", "reviews", "events"),
-                F($"{p}.snapshottrigger", "select", c.snapshottrigger ?? "end", "end", "new"),
-                F($"{p}.cooldown", "number", n(c.cooldown)),
-                F($"{p}.cooldownperobject", "checkbox", b(c.cooldownperobject)),
-            };
+                S("source",
+                    F($"{p}.topic", "select", c.topic ?? "reviews", "reviews", "events"),
+                    F($"{p}.severity", "text", string.Join(", ", c.severity ?? new List<string>())),
+                    F($"{p}.zones", "text", string.Join(", ", c.zones ?? new List<string>())),
+                    F($"{p}.objects", "text", string.Join(", ", (c.objects ?? new List<Objects>()).Where(o => !string.IsNullOrEmpty(o.label))
+                        .Select(o => o.label + ":" + o.percent.ToString(CultureInfo.InvariantCulture))))),
+                S("send",
+                    F($"{p}.snapshot", "checkbox", b(c.snapshot)),
+                    F($"{p}.snapshottrigger", "select", c.snapshottrigger ?? "end", "end", "new"),
+                    F($"{p}.clip", "checkbox", b(c.clip)),
+                    F($"{p}.sctogether", "checkbox", b(c.sctogether)),
+                    F($"{p}.gif", "checkbox", b(c.gif))),
+                S("analysis",
+                    F($"{p}.ai", "checkbox", b(c.ai)),
+                    F($"{p}.fr", "checkbox", b(c.fr))),
+                S("noise",
+                    F($"{p}.cooldown", "number", n(c.cooldown)),
+                    F($"{p}.cooldownperobject", "checkbox", b(c.cooldownperobject)),
+                    F($"{p}.quiet.from", "text", c.quiet?.from),
+                    F($"{p}.quiet.to", "text", c.quiet?.to),
+                    // Empty = the camera follows options.quiet.
+                    F($"{p}.quiet.mode", "select", c.quiet?.mode ?? "", "", "silent", "snapshot", "none")),
+                S("integration",
+                    F($"{p}.trueend", "checkbox", b(c.trueend))),
+            }.SelectMany(x => x).ToList();
         }
+
+        // Fields of one section of a pane.
+        static Field[] S(string group, params Field[] fields) => fields.Select(f => f with { group = group }).ToArray();
 
         static string n(long? v) => v == null || v == 0 ? "0" : v.Value.ToString(CultureInfo.InvariantCulture);
         static string n(int? v) => v == null ? "" : v.Value.ToString(CultureInfo.InvariantCulture);
@@ -502,6 +552,7 @@ namespace Lookout
         }
         static Field F(string path, string type, string value, params string[] options) =>
             new Field(path, type, value ?? "", L(path), options is { Length: > 0 } ? options : null);
+        static Group G(string id, params Field[][] sections) => G(id, sections.SelectMany(x => x).ToArray());
         static Group G(string id, params Field[] fields) => new Group(id, L10n.Web.Has("web.config.group." + id) ? L10n.Web.T("web.config.group." + id) : id, fields.ToList());
     }
 }

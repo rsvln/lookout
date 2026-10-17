@@ -289,6 +289,7 @@
   /* Nested YAML blocks (e.g. telegram.links): indented under a title, with a line on the left. */
   .sub-block { margin: 22px 0 0 14px; padding-left: 14px; border-left: 2px solid var(--border); }
   .sub-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 10px; }
+  .tree-pane-head + .sub-block, .tree-hint + .sub-block { margin-top: 4px; }
   .sub-block .sub-master { grid-column: 1 / -1; }
   .sub-block.off label:not(.sub-master) { opacity: .45; }
   @media (max-width: 720px) {

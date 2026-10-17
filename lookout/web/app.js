@@ -646,6 +646,7 @@ function fieldInput(f) {
 }
 
 function optionLabel(f, o) {
+  if (o === '') return t('web.config.inherit');
   if (f.path && /notifiers\[\d+\]\.type$/.test(f.path) && I18N['web.config.notifier.' + o])
     return t('web.config.notifier.' + o);
   return o;
@@ -738,32 +739,43 @@ function renderTreePanes(nodes) {
   return html;
 }
 
-// Fields of a pane as a tree by their YAML path: the pane's own keys first, then every nested block
-// (e.g. telegram.links.*) indented under its title. A block's "enabled" checkbox comes first and, while off,
-// greys out the rest of the block (values are kept and saved).
+// Fields of a pane, grouped: by the sections the server gives (field.group, e.g. "Source", "What to send" of a
+// camera), otherwise as a tree by YAML path (the pane's own keys first, every nested block indented under its
+// title). A block's "enabled" checkbox comes first and, while off, greys out the rest of the block (values are kept).
 function paneFields(fields, grid) {
   if (!fields.length) return '';
+  const sections = new Map();
+  const add = (key, f) => (sections.get(key) || sections.set(key, []).get(key)).push(f);
+  if (fields.some(f => f.group)) {
+    fields.forEach(f => add(f.group || '', f));
+    return [...sections].map(([g, list]) => g ? subBlock(sectionTitle(g), list, grid) : plainGrid(list, grid)).join('');
+  }
   const parentOf = p => p.slice(0, p.lastIndexOf('.'));
   const base = fields.map(f => parentOf(f.path)).reduce((a, b) => (b.length < a.length ? b : a));
-  const direct = fields.filter(f => parentOf(f.path) === base);
-  const blocks = new Map();
-  for (const f of fields) {
-    const p = parentOf(f.path);
-    if (p !== base) (blocks.get(p) || blocks.set(p, []).get(p)).push(f);
-  }
-  let html = direct.length ? `<div class="${grid}">${direct.map(fieldInput).join('')}</div>` : '';
-  for (const [path, list] of blocks) {
-    const key = path.slice(path.lastIndexOf('.') + 1);
-    const title = I18N['web.config.group.' + key] ? t('web.config.group.' + key) : key;
-    const master = list.find(f => f.type === 'checkbox' && f.path.endsWith('.enabled'));
-    const rest = list.filter(f => f !== master);
-    const off = master && master.value !== 'true';
-    html += `<div class="sub-block${off ? ' off' : ''}"><div class="sub-title">${esc(title)}</div>`
-      + `<div class="${grid}">${master ? fieldInput(master).replace('<label class="chk">', '<label class="chk sub-master">') : ''}`
-      + rest.map(f => off ? fieldInput(f).replace(' data-path=', ' disabled data-path=') : fieldInput(f)).join('')
-      + `</div></div>`;
-  }
-  return html;
+  fields.forEach(f => add(parentOf(f.path), f));
+  return [...sections].map(([path, list]) => path === base
+    ? plainGrid(list, grid)
+    : subBlock(sectionTitle(path.slice(path.lastIndexOf('.') + 1)), list, grid)).join('');
+}
+
+function sectionTitle(key) {
+  if (I18N['web.config.section.' + key]) return t('web.config.section.' + key);
+  if (I18N['web.config.group.' + key]) return t('web.config.group.' + key);
+  return key;
+}
+
+function plainGrid(list, grid) {
+  return `<div class="${grid}">${list.map(fieldInput).join('')}</div>`;
+}
+
+function subBlock(title, list, grid) {
+  const master = list.find(f => f.type === 'checkbox' && f.path.endsWith('.enabled'));
+  const rest = list.filter(f => f !== master);
+  const off = master && master.value !== 'true';
+  return `<div class="sub-block${off ? ' off' : ''}"><div class="sub-title">${esc(title)}</div>`
+    + `<div class="${grid}">${master ? fieldInput(master).replace('<label class="chk">', '<label class="chk sub-master">') : ''}`
+    + rest.map(f => off ? fieldInput(f).replace(' data-path=', ' disabled data-path=') : fieldInput(f)).join('')
+    + `</div></div>`;
 }
 
 // The master checkbox of a block enables or greys out the other fields of that block.
@@ -967,14 +979,24 @@ async function loadConfigForm() {
   removedNotifiers = [];
   formTree = settingsTree(data);
   renderSettings();
+  savedValues = allFields();
 }
 
-function collectFields() {
+// Values as loaded (or last saved): only fields that differ from them are sent, so saving doesn't rewrite
+// untouched parts of the YAML (defaults, list formatting, empty blocks). New cameras / channels have no
+// saved values and are sent whole.
+let savedValues = {};
+
+function allFields() {
   const fields = {};
   document.querySelectorAll('#config-form [data-path]').forEach(el => {
     fields[el.dataset.path] = el.type === 'checkbox' ? (el.checked ? 'true' : 'false') : el.value;
   });
   return fields;
+}
+
+function collectFields() {
+  return Object.fromEntries(Object.entries(allFields()).filter(([path, v]) => savedValues[path] !== v));
 }
 
 function setBusy(text) {
@@ -1052,6 +1074,7 @@ async function saveConfig(apply) {
       : configRequest('/api/config', { content, apply }));
     if (!ok) return;
     if (configMode === 'form') {
+      savedValues = allFields();
       const fr = frigateNode();
       originalCameras = new Set((fr?.children || []).map(c => c.title));
       removedCameras = [];
