@@ -325,6 +325,7 @@
     color: var(--muted); font-size: 12px;
   }
   .card .no-snap { padding: 0 12px; text-align: center; }
+  .card .no-snap .act { margin-top: 8px; }
   .card img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; display: block; }
   .card .meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .card .row1 { display: flex; justify-content: space-between; gap: 8px; }

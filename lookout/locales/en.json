@@ -124,6 +124,8 @@
   "web.no_snapshot.expired": "no snapshot: Frigate deleted it after {0} days (snapshots.retain)",
   "web.no_snapshot.disabled": "no snapshot: snapshots are off for this camera in Frigate",
   "web.no_snapshot.missing": "no snapshot: Frigate does not have it (deleted or never saved)",
+  "web.snapshot_from_recording": "Take from recording",
+  "web.snapshot_from_recording.failed": "Could not take a frame",
   "web.video": "Video",
   "web.download": "Download clip",
   "web.video_error": "Clip is not available",

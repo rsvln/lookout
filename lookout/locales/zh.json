@@ -115,6 +115,8 @@
   "web.no_snapshot.expired": "无快照：Frigate 已在 {0} 天后删除（snapshots.retain）",
   "web.no_snapshot.disabled": "无快照：Frigate 中此摄像头未启用快照",
   "web.no_snapshot.missing": "无快照：Frigate 中没有（已删除或未保存）",
+  "web.snapshot_from_recording": "从录像截取",
+  "web.snapshot_from_recording.failed": "无法截取画面",
   "web.video": "视频",
   "web.download": "下载片段",
   "web.video_error": "片段不可用",

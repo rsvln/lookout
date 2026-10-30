@@ -12,9 +12,21 @@ namespace Lookout
                     var ev = StatsService.ResolveEvent(id);
                     var bytes = ev == null ? null : await StatsService.GetSnapshotAsync(ev);
                     if (bytes != null) return Results.File(bytes, "image/jpeg");
-                    if (ev == null) return Results.NotFound(new { reason = "missing", days = 0 });
+                    if (ev == null) return Results.NotFound(new { reason = "missing", days = 0, recording = false });
                     var (reason, days) = await StatsService.SnapshotMissingAsync(ev);
-                    return Results.NotFound(new { reason, days });
+                    return Results.NotFound(new { reason, days, recording = StatsService.HasRecording(ev) });
+                }
+                catch (Exception ex) { return Results.Problem(ex.Message); }
+            });
+
+            // Takes the missing snapshot from the event's recording (the button on a card without one).
+            app.MapPost("/api/snapshot/{id}/fromrecording", async (string id) =>
+            {
+                try
+                {
+                    var ev = StatsService.ResolveEvent(id);
+                    bool ok = ev != null && await StatsService.SnapshotFromRecordingAsync(ev);
+                    return ok ? Results.Ok(new { ok = true }) : Results.NotFound(new { ok = false });
                 }
                 catch (Exception ex) { return Results.Problem(ex.Message); }
             });

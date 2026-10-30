@@ -124,6 +124,8 @@
   "web.no_snapshot.expired": "нет снапшота: Frigate удалил его через {0} дн. (snapshots.retain)",
   "web.no_snapshot.disabled": "нет снапшота: снапшоты для этой камеры выключены во Frigate",
   "web.no_snapshot.missing": "нет снапшота: во Frigate его нет (удалён или не был сохранён)",
+  "web.snapshot_from_recording": "Взять кадр из записи",
+  "web.snapshot_from_recording.failed": "Не удалось взять кадр",
   "web.video": "Видео",
   "web.download": "Скачать ролик",
   "web.video_error": "Ролик недоступен",

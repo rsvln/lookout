@@ -43,6 +43,115 @@ namespace Lookout
                 }
             }
             yield return Path.Combine(Program.appLocation ?? "", "live", camera + "-" + id + ".jpg");
+            string taken = LocalStore.SnapshotFile(camera, id);
+            if (taken != null) yield return taken;
+        }
+
+        // A snapshot for a finished event that Frigate has none for: the frame of its recording where the object was
+        // when Frigate picked its best detection (data.box matched against data.path_data), or the event's middle.
+        // Kept in lookout.db + snapshots/ while that recording exists in Frigate (see CleanTakenSnapshots).
+        public static async Task<bool> SnapshotFromRecordingAsync(EventRow ev)
+        {
+            if (ev.end_time == null || !LocalStore.IsOpen) return false;
+            double t = BestFrameTime(ev);
+            var segment = RecordingAt(ev.camera, t);
+            if (segment == null) return false;
+
+            Directory.CreateDirectory(LocalStore.SnapshotsDir);
+            string path = LocalStore.SnapshotFile(ev.camera, ev.id);
+            string tmp = path + ".tmp.jpg";
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("ffmpeg") { UseShellExecute = false, RedirectStandardError = true };
+                foreach (var a in new[] { "-y", "-hide_banner", "-loglevel", "error",
+                                          "-ss", Math.Max(0, t - segment.Value.start).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                                          "-i", segment.Value.path, "-frames:v", "1", "-q:v", "2", tmp })
+                    psi.ArgumentList.Add(a);
+                using var p = System.Diagnostics.Process.Start(psi);
+                string err = await p.StandardError.ReadToEndAsync();
+                await p.WaitForExitAsync();
+                if (p.ExitCode != 0 || !System.IO.File.Exists(tmp) || new FileInfo(tmp).Length == 0)
+                {
+                    Program.Log("app", ev.id, ev.camera, "ffmpeg failed to take a snapshot from the recording: " + err.Trim());
+                    return false;
+                }
+                System.IO.File.Move(tmp, path, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                Program.Log("app", ev.id, ev.camera, "ffmpeg failed to take a snapshot from the recording: " + ex.Message);
+                return false;
+            }
+            finally { try { System.IO.File.Delete(tmp); } catch { } }
+
+            LocalStore.AddSnapshot(ev.id, ev.camera, t);
+            Program.Log("app", ev.id, ev.camera, "Snapshot taken from the recording at " + ToLocal(t).ToString("yyyy-MM-dd HH:mm:ss.fff"));
+            return true;
+        }
+
+        static double BestFrameTime(EventRow ev)
+        {
+            double fallback = (ev.start_time + (ev.end_time ?? ev.start_time)) / 2;
+            try
+            {
+                using var db = Open();
+                using var cmd = new SqliteCommand("SELECT data FROM event WHERE id = $id", db);
+                cmd.Parameters.AddWithValue("$id", ev.id);
+                if (cmd.ExecuteScalar() is not string json) return fallback;
+                var data = Newtonsoft.Json.Linq.JObject.Parse(json);
+                var box = data["box"]?.ToObject<double[]>();
+                var path = data["path_data"] as Newtonsoft.Json.Linq.JArray;
+                if (box == null || box.Length < 4 || path == null || path.Count == 0) return fallback;
+                // Path points are the bottom centre of the object's box.
+                double bx = box[0] + box[2] / 2, by = box[1] + box[3];
+                var best = path.Select(pt => (x: (double)pt[0][0], y: (double)pt[0][1], t: (double)pt[1]))
+                               .OrderBy(pt => (pt.x - bx) * (pt.x - bx) + (pt.y - by) * (pt.y - by)).First();
+                return best.t;
+            }
+            catch { return fallback; }
+        }
+
+        // The camera's recording segment (local path) that contains moment t, or null.
+        static (string path, double start)? RecordingAt(string camera, double t)
+        {
+            var f = Program.settings.frigate;
+            using var db = Open();
+            using var cmd = new SqliteCommand("SELECT path, start_time FROM recordings WHERE camera = $camera AND start_time <= $t AND end_time > $t ORDER BY start_time DESC LIMIT 1", db);
+            cmd.Parameters.AddWithValue("$camera", camera);
+            cmd.Parameters.AddWithValue("$t", t);
+            using var dr = cmd.ExecuteReader();
+            if (!dr.Read()) return null;
+            string real = dr.GetString(0).Replace(f.recordingsoriginalpath ?? "", f.recordingspath ?? "");
+            return System.IO.File.Exists(real) ? (real, dr.GetDouble(1)) : null;
+        }
+
+        // Whether a snapshot can be taken from the event's recording (the button on a card without one).
+        public static bool HasRecording(EventRow ev)
+        {
+            try { return ev.end_time != null && LocalStore.IsOpen && RecordingAt(ev.camera, BestFrameTime(ev)) != null; }
+            catch { return false; }
+        }
+
+        // Taken snapshots live as long as the recording they came from: once Frigate has dropped that segment
+        // (record.retain), the snapshot goes too.
+        static void CleanTakenSnapshots()
+        {
+            try
+            {
+                using var db = Open();
+                foreach (var (id, camera, t) in LocalStore.Snapshots())
+                {
+                    using var cmd = new SqliteCommand("SELECT 1 FROM recordings WHERE camera = $camera AND start_time <= $t AND end_time > $t LIMIT 1", db);
+                    cmd.Parameters.AddWithValue("$camera", camera);
+                    cmd.Parameters.AddWithValue("$t", t);
+                    if (cmd.ExecuteScalar() == null)
+                    {
+                        LocalStore.RemoveSnapshot(id, camera);
+                        Program.Log("app", id, camera, "Snapshot taken from the recording removed: Frigate no longer has the recording");
+                    }
+                }
+            }
+            catch (Exception ex) { Program.Log("app", "", "", "Failed to clean snapshots taken from recordings: " + ex.Message); }
         }
 
         static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -219,7 +328,8 @@ namespace Lookout
             }
         }
 
-        // Runs CleanClipCache at startup and every 10 minutes, so clips don't pile up when nobody plays videos.
+        // Runs CleanClipCache and CleanTakenSnapshots at startup and every 10 minutes, so clips don't pile up when
+        // nobody plays videos and taken snapshots follow Frigate's recording retention.
         public static void StartClipCacheCleaner()
         {
             _ = Task.Run(async () =>
@@ -227,6 +337,7 @@ namespace Lookout
                 while (true)
                 {
                     CleanClipCache();
+                    CleanTakenSnapshots();
                     await Task.Delay(TimeSpan.FromMinutes(10));
                 }
             });

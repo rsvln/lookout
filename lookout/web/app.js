@@ -252,6 +252,22 @@ async function noSnapshot(img) {
     if (r.reason === 'expired') box.textContent = t('web.no_snapshot.expired').replace('{0}', r.days);
     else if (r.reason === 'disabled') box.textContent = t('web.no_snapshot.disabled');
     else if (r.reason === 'missing') box.textContent = t('web.no_snapshot.missing');
+    if (r.recording) {
+      const btn = document.createElement('button');
+      btn.className = 'act';
+      btn.textContent = t('web.snapshot_from_recording');
+      btn.onclick = async () => {
+        btn.disabled = true;
+        const ok = (await fetch(src + '/fromrecording', { method: 'POST' })).ok;
+        if (!ok) { btn.textContent = t('web.snapshot_from_recording.failed'); return; }
+        const img2 = document.createElement('img');
+        img2.src = src + '?t=' + Date.now();
+        img2.alt = '';
+        img2.onclick = () => openLightbox(img2.src);
+        box.replaceWith(img2);
+      };
+      box.append(document.createElement('br'), btn);
+    }
   } catch { }
 }
 

@@ -115,6 +115,8 @@
   "web.no_snapshot.expired": "sin captura: Frigate la borró tras {0} días (snapshots.retain)",
   "web.no_snapshot.disabled": "sin captura: las capturas están desactivadas para esta cámara en Frigate",
   "web.no_snapshot.missing": "sin captura: Frigate no la tiene (borrada o nunca guardada)",
+  "web.snapshot_from_recording": "Tomar de la grabación",
+  "web.snapshot_from_recording.failed": "No se pudo tomar el fotograma",
   "web.video": "Vídeo",
   "web.download": "Descargar clip",
   "web.video_error": "El clip no está disponible",

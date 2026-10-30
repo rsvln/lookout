@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Lookout.Tests
@@ -33,8 +33,8 @@ namespace Lookout.Tests
         {
             using var c = new SqliteConnection("Data Source=" + db);
             c.Open();
-            using var cmd = new SqliteCommand("SELECT version FROM schema_migrations", c);
-            Assert.Equal(1, Convert.ToInt32(cmd.ExecuteScalar()));
+            using var cmd = new SqliteCommand("SELECT MAX(version) FROM schema_migrations", c);
+            Assert.Equal(2, Convert.ToInt32(cmd.ExecuteScalar()));
         }
 
         [Fact]
@@ -149,6 +149,19 @@ namespace Lookout.Tests
             Assert.Equal("det-4", StatsService.ResolveEvent("rev-4").id);
             Assert.Equal("det-4", StatsService.ResolveEvent("det-4").id);
             Assert.Null(StatsService.ResolveEvent("missing"));
+        }
+
+        [Fact]
+        public void TakenSnapshot_IsListedAndRemovedWithItsFile()
+        {
+            Directory.CreateDirectory(LocalStore.SnapshotsDir);
+            string file = LocalStore.SnapshotFile("front", "e9");
+            File.WriteAllBytes(file, new byte[] { 1 });
+            LocalStore.AddSnapshot("e9", "front", 123.5);
+            Assert.Contains(("e9", "front", 123.5), LocalStore.Snapshots());
+            LocalStore.RemoveSnapshot("e9", "front");
+            Assert.Empty(LocalStore.Snapshots());
+            Assert.False(File.Exists(file));
         }
     }
 }

@@ -77,6 +77,66 @@ namespace Lookout
                     );");
                 Exec(db, "INSERT INTO schema_migrations (version) VALUES (1)");
             }
+            if (current < 2)
+            {
+                // Snapshots Lookout took from Frigate's recording when Frigate had none; the files are in SnapshotsDir.
+                Exec(db, @"
+                    CREATE TABLE snapshots (
+                        id TEXT PRIMARY KEY,
+                        camera TEXT NOT NULL,
+                        frame_time REAL NOT NULL,
+                        created_at REAL NOT NULL
+                    );");
+                Exec(db, "INSERT INTO schema_migrations (version) VALUES (2)");
+            }
+        }
+
+        // snapshots/ next to lookout.db, or null while the store is off.
+        public static string SnapshotsDir
+        {
+            get
+            {
+                string p = Path;
+                return p == null ? null : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(p)), "snapshots");
+            }
+        }
+
+        public static string SnapshotFile(string camera, string id) =>
+            SnapshotsDir == null ? null : System.IO.Path.Combine(SnapshotsDir, camera + "-" + id + ".jpg");
+
+        public static void AddSnapshot(string id, string camera, double frameTime)
+        {
+            if (!IsOpen) return;
+            using var db = Connect();
+            using var cmd = new SqliteCommand(
+                "INSERT OR REPLACE INTO snapshots (id, camera, frame_time, created_at) VALUES ($id, $camera, $t, $now)", db);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.Parameters.AddWithValue("$camera", camera);
+            cmd.Parameters.AddWithValue("$t", frameTime);
+            cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0);
+            cmd.ExecuteNonQuery();
+        }
+
+        public static List<(string id, string camera, double frameTime)> Snapshots()
+        {
+            var list = new List<(string, string, double)>();
+            if (!IsOpen) return list;
+            using var db = Connect();
+            using var cmd = new SqliteCommand("SELECT id, camera, frame_time FROM snapshots", db);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.GetDouble(2)));
+            return list;
+        }
+
+        // Drops the row and its file.
+        public static void RemoveSnapshot(string id, string camera)
+        {
+            if (!IsOpen) return;
+            try { File.Delete(SnapshotFile(camera, id)); } catch { }
+            using var db = Connect();
+            using var cmd = new SqliteCommand("DELETE FROM snapshots WHERE id = $id", db);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
         }
 
         static void Exec(SqliteConnection db, string sql)
