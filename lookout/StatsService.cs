@@ -102,6 +102,38 @@ namespace Lookout
             return null;
         }
 
+        // Why an event has no snapshot, judged by the camera's snapshot settings in Frigate's effective config:
+        // "disabled" (snapshots off), "expired" (older than snapshots.retain.default, Frigate deleted it), "missing" otherwise.
+        public static async Task<(string reason, int days)> SnapshotMissingAsync(EventRow ev)
+        {
+            var cam = await FrigateSnapshotSettingsAsync(ev.camera);
+            if (cam == null) return ("missing", 0);
+            if (!cam.Value.enabled) return ("disabled", 0);
+            double age = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (ev.end_time ?? ev.start_time);
+            if (cam.Value.days > 0 && age > cam.Value.days * 86400.0) return ("expired", cam.Value.days);
+            return ("missing", 0);
+        }
+
+        static Newtonsoft.Json.Linq.JObject frigateConfig;
+        static DateTime frigateConfigAt;
+
+        static async Task<(bool enabled, int days)?> FrigateSnapshotSettingsAsync(string camera)
+        {
+            if (frigateConfig == null || DateTime.UtcNow - frigateConfigAt > TimeSpan.FromMinutes(10))
+            {
+                try
+                {
+                    var f = Program.settings.frigate;
+                    frigateConfig = Newtonsoft.Json.Linq.JObject.Parse(await http.GetStringAsync("http://" + f.host + ":" + f.port + "/api/config"));
+                    frigateConfigAt = DateTime.UtcNow;
+                }
+                catch { if (frigateConfig == null) return null; }
+            }
+            var s = frigateConfig.SelectToken("cameras." + camera + ".snapshots") ?? frigateConfig.SelectToken("snapshots");
+            if (s == null) return null;
+            return (s.Value<bool?>("enabled") ?? false, (int)Math.Round((double?)s.SelectToken("retain.default") ?? 0));
+        }
+
         static readonly TimeSpan LiveClipTtl = TimeSpan.FromSeconds(30);
         static string ClipCacheDir => Path.Combine(Program.appLocation, "clipcache");
         static readonly HttpClient clipHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };

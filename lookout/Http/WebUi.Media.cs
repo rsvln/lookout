@@ -11,7 +11,10 @@ namespace Lookout
                 {
                     var ev = StatsService.ResolveEvent(id);
                     var bytes = ev == null ? null : await StatsService.GetSnapshotAsync(ev);
-                    return bytes == null ? Results.NotFound() : Results.File(bytes, "image/jpeg");
+                    if (bytes != null) return Results.File(bytes, "image/jpeg");
+                    if (ev == null) return Results.NotFound(new { reason = "missing", days = 0 });
+                    var (reason, days) = await StatsService.SnapshotMissingAsync(ev);
+                    return Results.NotFound(new { reason, days });
                 }
                 catch (Exception ex) { return Results.Problem(ex.Message); }
             });

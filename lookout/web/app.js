@@ -240,10 +240,25 @@ const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="tru
 const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 15v5h16v-5"/></svg>';
 const ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="M8.2 10.8l7.6-5.1M8.2 13.2l7.6 5.1"/></svg>';
 
+// A card whose snapshot is gone: the server's 404 says why (snapshots off, deleted by Frigate's retention, or just missing).
+async function noSnapshot(img) {
+  const box = document.createElement('div');
+  box.className = 'no-snap';
+  box.textContent = t('web.no_snapshot');
+  const src = img.src;
+  img.replaceWith(box);
+  try {
+    const r = await (await fetch(src)).json();
+    if (r.reason === 'expired') box.textContent = t('web.no_snapshot.expired').replace('{0}', r.days);
+    else if (r.reason === 'disabled') box.textContent = t('web.no_snapshot.disabled');
+    else if (r.reason === 'missing') box.textContent = t('web.no_snapshot.missing');
+  } catch { }
+}
+
 function eventCard(r) {
   return `
     <div class="card">
-      <div class="img"><img loading="lazy" src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" onerror="this.replaceWith(document.createTextNode(t('web.no_snapshot')))" alt=""></div>
+      <div class="img"><img loading="lazy" src="/api/snapshot/${encodeURIComponent(r.id)}" onclick="openLightbox(this.src)" onerror="noSnapshot(this)" alt=""></div>
       <div class="meta">
         <div class="row1"><span class="lbl">${esc(labelName(r.label))}${r.sub_label ? ` <span class="sub">(${esc(r.sub_label)})</span>` : ''}</span>
           <span class="score">${Math.round(r.score * 100)}%</span></div>

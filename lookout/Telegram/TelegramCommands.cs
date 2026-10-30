@@ -301,17 +301,45 @@ namespace Lookout
             return sb.ToString();
         }
 
-        static Task TgHandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        static string pollErrorText;
+        static int pollErrorRepeats;
+        static DateTime pollErrorLast, pollErrorReported;
+
+        // While the Bot API is down the receiver fails on every retry: the same error is written once, then as
+        // "repeated N times" every 5 minutes and when it changes, and each retry waits a few seconds.
+        static async Task TgHandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
             {
                 var ErrorMessage = exception switch
                 {
                     ApiRequestException
                     apiRequestException => $"Telegram API Error: [{apiRequestException.ErrorCode}] {apiRequestException.Message}",
-                    _ => exception.ToString()
+                    _ => exception.GetType().FullName + ": " + exception.Message
                 };
 
-                Log("app", "", "", ErrorMessage);
-                return Task.CompletedTask;
+                var now = DateTime.Now;
+                if (ErrorMessage == pollErrorText && now - pollErrorLast < TimeSpan.FromMinutes(1))
+                {
+                    pollErrorRepeats++;
+                    if (now - pollErrorReported >= TimeSpan.FromMinutes(5))
+                    {
+                        Log("app", "", "", $"Telegram polling error repeated {pollErrorRepeats} times since {pollErrorReported:HH:mm:ss}: {ErrorMessage}");
+                        pollErrorRepeats = 0;
+                        pollErrorReported = now;
+                    }
+                }
+                else
+                {
+                    if (pollErrorRepeats > 0)
+                        Log("app", "", "", $"Telegram polling error repeated {pollErrorRepeats} times, last at {pollErrorLast:HH:mm:ss}: {pollErrorText}");
+                    Log("app", "", "", ErrorMessage);
+                    pollErrorText = ErrorMessage;
+                    pollErrorRepeats = 0;
+                    pollErrorReported = now;
+                }
+                pollErrorLast = now;
+
+                try { await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); }
+                catch (OperationCanceledException) { }
             }
 
     }
